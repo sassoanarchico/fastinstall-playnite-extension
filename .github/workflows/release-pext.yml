@@ -23,35 +23,49 @@ jobs:
 
       - name: Download Playnite SDK (for build)
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = "Stop"
 
-          # Use GitHub's stable "latest/download" URL first (no API required).
-          $zipPath = Join-Path $env:RUNNER_TEMP "PlayniteSDK.zip"
-          $urls = @(
-            "https://github.com/JosefNemec/Playnite/releases/latest/download/PlayniteSDK.zip",
-            "https://github.com/JosefNemec/Playnite/releases/latest/download/PlaynitePortable.zip"
-          )
+          # Use GitHub CLI to download assets (more reliable than raw HTTP in CI environments).
+          $repo = "JosefNemec/Playnite"
+          $tmp = $env:RUNNER_TEMP
 
-          $downloaded = $false
-          foreach ($u in $urls) {
+          Write-Host "Downloading Playnite SDK from $repo ..."
+          Push-Location $tmp
+          try {
+            # Prefer SDK zip; fallback to Portable zip (we'll search for Playnite.SDK.dll after extraction).
+            $downloaded = $false
+
             try {
-              Write-Host "Trying: $u"
-              Invoke-WebRequest -Uri $u -OutFile $zipPath -UseBasicParsing
+              gh release download --repo $repo --pattern "PlayniteSDK*.zip" --dir $tmp
               $downloaded = $true
-              break
             } catch {
-              Write-Host "Failed: $u"
+              Write-Host "PlayniteSDK*.zip not downloaded, trying portable..."
             }
+
+            if (-not $downloaded) {
+              gh release download --repo $repo --pattern "PlaynitePortable*.zip" --dir $tmp
+              $downloaded = $true
+            }
+
+            if (-not $downloaded) { throw "Failed to download Playnite release zip via gh." }
+          } finally {
+            Pop-Location
           }
 
-          if (-not $downloaded) {
-            throw "Failed to download Playnite SDK zip from latest release."
+          $zipPath = Get-ChildItem -Path $tmp -Filter "PlayniteSDK*.zip" | Select-Object -First 1
+          if (-not $zipPath) {
+            $zipPath = Get-ChildItem -Path $tmp -Filter "PlaynitePortable*.zip" | Select-Object -First 1
           }
+          if (-not $zipPath) { throw "Downloaded zip not found in runner temp." }
+
+          Write-Host "Using zip: $($zipPath.FullName)"
 
           $extractDir = Join-Path $env:RUNNER_TEMP "playnite"
           if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
-          Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
+          Expand-Archive -Path $zipPath.FullName -DestinationPath $extractDir -Force
 
           $sdk = Get-ChildItem -Path $extractDir -Recurse -Filter "Playnite.SDK.dll" | Select-Object -First 1
           if (-not $sdk) { throw "Playnite.SDK.dll not found in extracted Playnite zip." }
