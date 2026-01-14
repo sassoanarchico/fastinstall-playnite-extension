@@ -39,10 +39,12 @@ jobs:
           Write-Host "Assets:"
           $assetNames | ForEach-Object { Write-Host "  - $_" }
 
-          # Prefer SDK, fallback to Portable. Accept .zip or .7z.
+          # Prefer explicit SDK/Portable if present, otherwise fall back to full Playnite archive (e.g. 10.47.7z).
+          # Some Playnite releases provide only installer + full archive; the full archive still contains Playnite.SDK.dll.
           $wanted = @(
             @{ Name = "SDK"; Pattern = "^PlayniteSDK.*\\.(zip|7z)$" },
-            @{ Name = "Portable"; Pattern = "^PlaynitePortable.*\\.(zip|7z)$" }
+            @{ Name = "Portable"; Pattern = "^PlaynitePortable.*\\.(zip|7z)$" },
+            @{ Name = "FullArchive"; Pattern = "^[0-9]+(\\.[0-9]+)*\\.(zip|7z)$" }
           )
 
           $assetToDownload = $null
@@ -55,7 +57,7 @@ jobs:
           }
 
           if (-not $assetToDownload) {
-            throw "Could not find PlayniteSDK/PlaynitePortable asset (zip/7z) in latest release."
+            throw "Could not find a suitable Playnite asset (SDK/Portable/full archive zip/7z) in latest release."
           }
 
           Write-Host "Downloading asset via gh..."
