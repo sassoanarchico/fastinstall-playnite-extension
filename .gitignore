@@ -46,6 +46,9 @@ bld/
 build_output.txt
 build.log
 
+# Playnite extension packages
+*.pext
+
 # .NET Core
 project.lock.json
 project.fragment.lock.json

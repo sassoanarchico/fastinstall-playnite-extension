@@ -56,6 +56,10 @@
       <DependentUpon>FastInstallSettingsView.xaml</DependentUpon>
     </Compile>
     <Compile Include="FileCopyHelper.cs" />
+    <Compile Include="BackgroundInstallManager.cs" />
+    <Compile Include="InstallationProgressWindow.xaml.cs">
+      <DependentUpon>InstallationProgressWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -63,9 +67,16 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
+    <Page Include="InstallationProgressWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
   </ItemGroup>
   <ItemGroup>
     <None Include="extension.yaml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="icon.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

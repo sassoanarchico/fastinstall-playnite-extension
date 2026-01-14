@@ -20,12 +20,6 @@
             <TextBlock Text="FastInstall - Folder Configurations" 
                        FontSize="18" 
                        FontWeight="Bold"/>
-            <TextBlock Text=" v0.13" 
-                       FontSize="14" 
-                       VerticalAlignment="Bottom"
-                       Margin="5,0,0,2"
-                       Foreground="LimeGreen"
-                       FontWeight="Bold"/>
         </StackPanel>
 
         <!-- Description -->
@@ -178,9 +172,11 @@
                 
                 <Separator Margin="0,10,0,10"/>
                 
-                <TextBlock HorizontalAlignment="Right" FontSize="12" Foreground="LimeGreen" FontWeight="Bold">
-                    Version: 0.13
-                </TextBlock>
+                <TextBlock HorizontalAlignment="Right"
+                           FontSize="12"
+                           Foreground="LimeGreen"
+                           FontWeight="Bold"
+                           Text="{Binding PluginVersionDisplay, StringFormat=Version: {0}}"/>
             </StackPanel>
         </Border>
     </Grid>

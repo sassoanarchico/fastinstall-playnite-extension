@@ -14,7 +14,6 @@ namespace FastInstall
     {
         private static readonly ILogger logger = LogManager.GetLogger();
         private readonly FastInstallPlugin plugin;
-        private CancellationTokenSource cancellationTokenSource;
 
         public FastInstallController(Game game, FastInstallPlugin plugin) : base(game)
         {
@@ -24,9 +23,6 @@ namespace FastInstall
 
         public override void Install(InstallActionArgs args)
         {
-            cancellationTokenSource = new CancellationTokenSource();
-            var token = cancellationTokenSource.Token;
-
             var sourcePath = plugin.GetSourcePath(Game);
             var destinationPath = plugin.GetDestinationPath(Game);
 
@@ -55,182 +51,18 @@ namespace FastInstall
                 return;
             }
 
-            // Ensure destination parent directory exists
-            var destParent = Path.GetDirectoryName(destinationPath);
-            if (!Directory.Exists(destParent))
-            {
-                try
+            logger.Info($"FastInstall: Starting background installation for '{Game.Name}'");
+
+            // Start background installation - Playnite remains fully usable!
+            BackgroundInstallManager.Instance.StartInstallation(
+                Game,
+                sourcePath,
+                destinationPath,
+                (installedArgs) =>
                 {
-                    Directory.CreateDirectory(destParent);
-                }
-                catch (Exception ex)
-                {
-                    plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                        $"Could not create destination folder:\n{destParent}\n\nError: {ex.Message}",
-                        "FastInstall Error");
-                    return;
-                }
-            }
-
-            logger.Info($"FastInstall: Installing '{Game.Name}' from '{sourcePath}' to '{destinationPath}'");
-
-            // Run the copy with progress dialog
-            var globalProgress = plugin.PlayniteApi.Dialogs.ActivateGlobalProgress(
-                (progressArgs) =>
-                {
-                    try
-                    {
-                        progressArgs.ProgressMaxValue = 100;
-                        progressArgs.CurrentProgressValue = 0;
-                        progressArgs.Text = $"Preparing to copy {Game.Name}...";
-
-                        var copyTask = FileCopyHelper.CopyDirectoryWithProgress(
-                            sourcePath,
-                            destinationPath,
-                            (progress) =>
-                            {
-                                // Update progress dialog
-                                progressArgs.CurrentProgressValue = progress.PercentComplete;
-                                progressArgs.Text = FormatProgressText(Game.Name, progress);
-                            },
-                            progressArgs.CancelToken);
-
-                        copyTask.Wait(progressArgs.CancelToken);
-
-                        if (progressArgs.CancelToken.IsCancellationRequested)
-                        {
-                            // Clean up partial copy
-                            CleanupPartialCopy(destinationPath);
-                            return;
-                        }
-
-                        if (copyTask.Result)
-                        {
-                            // Success - notify on main thread
-                            plugin.PlayniteApi.MainView.UIDispatcher.Invoke(() =>
-                            {
-                                InvokeOnInstalled(new GameInstalledEventArgs(new GameInstallationData
-                                {
-                                    InstallDirectory = destinationPath
-                                }));
-                            });
-
-                            logger.Info($"FastInstall: Successfully installed '{Game.Name}'");
-                        }
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        logger.Info($"FastInstall: Installation of '{Game.Name}' was cancelled.");
-                        CleanupPartialCopy(destinationPath);
-                    }
-                    catch (AggregateException ae)
-                    {
-                        var innerEx = ae.InnerException ?? ae;
-                        HandleCopyException(innerEx, destinationPath);
-                    }
-                    catch (Exception ex)
-                    {
-                        HandleCopyException(ex, destinationPath);
-                    }
-                },
-                new GlobalProgressOptions($"Installing {Game.Name}...", true)
-                {
-                    IsIndeterminate = false
+                    // This callback is invoked when installation completes
+                    InvokeOnInstalled(installedArgs);
                 });
-        }
-
-        private string FormatProgressText(string gameName, CopyProgressInfo progress)
-        {
-            var lines = new System.Text.StringBuilder();
-            lines.AppendLine($"Installing: {gameName}");
-            lines.AppendLine();
-            lines.AppendLine($"Progress: {progress.CopiedFormatted} / {progress.TotalFormatted} ({progress.PercentComplete}%)");
-            lines.AppendLine($"Speed: {progress.SpeedFormatted}");
-            lines.AppendLine($"Elapsed: {progress.ElapsedFormatted}");
-            lines.AppendLine($"Remaining: {progress.RemainingFormatted}");
-            lines.AppendLine();
-            lines.AppendLine($"Files: {progress.FilesCopied} / {progress.TotalFiles}");
-            
-            if (!string.IsNullOrEmpty(progress.CurrentFile))
-            {
-                var displayFile = progress.CurrentFile;
-                if (displayFile.Length > 50)
-                {
-                    displayFile = "..." + displayFile.Substring(displayFile.Length - 47);
-                }
-                lines.AppendLine($"Current: {displayFile}");
-            }
-
-            return lines.ToString();
-        }
-
-        private void CleanupPartialCopy(string destinationPath)
-        {
-            try
-            {
-                if (Directory.Exists(destinationPath))
-                {
-                    logger.Info($"FastInstall: Cleaning up partial copy at '{destinationPath}'");
-                    Directory.Delete(destinationPath, true);
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.Warn(ex, $"FastInstall: Could not clean up partial copy at '{destinationPath}'");
-            }
-        }
-
-        private void HandleCopyException(Exception ex, string destinationPath)
-        {
-            CleanupPartialCopy(destinationPath);
-
-            if (ex is IOException ioEx && (ioEx.Message.Contains("not enough space") || ioEx.HResult == -2147024784))
-            {
-                logger.Error(ex, $"FastInstall: Disk full while installing '{Game.Name}'");
-                plugin.PlayniteApi.MainView.UIDispatcher.Invoke(() =>
-                {
-                    plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                        $"Not enough disk space to install '{Game.Name}'.\n\nPlease free up space on the destination drive and try again.",
-                        "FastInstall - Disk Full");
-                });
-            }
-            else if (ex is UnauthorizedAccessException)
-            {
-                logger.Error(ex, $"FastInstall: Permission denied while installing '{Game.Name}'");
-                plugin.PlayniteApi.MainView.UIDispatcher.Invoke(() =>
-                {
-                    plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                        $"Permission denied while installing '{Game.Name}'.\n\nPlease check folder permissions and ensure no files are in use.",
-                        "FastInstall - Access Denied");
-                });
-            }
-            else if (ex is DirectoryNotFoundException)
-            {
-                logger.Error(ex, $"FastInstall: Source folder missing for '{Game.Name}'");
-                plugin.PlayniteApi.MainView.UIDispatcher.Invoke(() =>
-                {
-                    plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                        $"Source folder not found for '{Game.Name}'.\n\nThe game may have been moved or deleted from the archive.",
-                        "FastInstall - Source Missing");
-                });
-            }
-            else
-            {
-                logger.Error(ex, $"FastInstall: Error installing '{Game.Name}'");
-                plugin.PlayniteApi.MainView.UIDispatcher.Invoke(() =>
-                {
-                    plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                        $"Error installing '{Game.Name}':\n\n{ex.Message}",
-                        "FastInstall Error");
-                });
-            }
-        }
-
-        public override void Dispose()
-        {
-            cancellationTokenSource?.Cancel();
-            cancellationTokenSource?.Dispose();
-            base.Dispose();
         }
     }
 

@@ -43,7 +43,7 @@ namespace FastInstall
         private static readonly ILogger logger = LogManager.GetLogger();
         private FastInstallSettingsViewModel settingsViewModel;
 
-        public const string PluginVersion = "0.1.3";
+        public const string PluginVersion = "0.1.5";
         
         public override Guid Id { get; } = Guid.Parse("F8A1B2C3-D4E5-6789-ABCD-EF1234567890");
         public override string Name => "FastInstall";
@@ -59,6 +59,9 @@ namespace FastInstall
             {
                 HasSettings = true
             };
+            
+            // Initialize the background install manager
+            BackgroundInstallManager.Initialize(api);
         }
         
         /// <summary>

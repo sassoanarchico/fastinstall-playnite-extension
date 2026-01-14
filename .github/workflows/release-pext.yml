@@ -1,0 +1,99 @@
+name: Build and Release .pext
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Download Playnite SDK (for build)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $repo = "JosefNemec/Playnite"
+          $headers = @{
+            "Accept" = "application/vnd.github+json"
+            "User-Agent" = "fastinstall-ci"
+          }
+
+          $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -Headers $headers
+          $asset = $rel.assets | Where-Object { $_.name -match "PlaynitePortable.*\.zip$" } | Select-Object -First 1
+
+          if (-not $asset) {
+            throw "Could not find PlaynitePortable zip in latest Playnite release assets."
+          }
+
+          $zipPath = Join-Path $env:RUNNER_TEMP "PlaynitePortable.zip"
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath
+
+          $extractDir = Join-Path $env:RUNNER_TEMP "playnite"
+          if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
+          Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
+
+          $sdk = Get-ChildItem -Path $extractDir -Recurse -Filter "Playnite.SDK.dll" | Select-Object -First 1
+          if (-not $sdk) { throw "Playnite.SDK.dll not found in extracted PlaynitePortable zip." }
+
+          $destDir = Join-Path $env:LOCALAPPDATA "Playnite"
+          New-Item -ItemType Directory -Force -Path $destDir | Out-Null
+          Copy-Item -Force -Path $sdk.FullName -Destination (Join-Path $destDir "Playnite.SDK.dll")
+
+      - name: Read version from extension.yaml
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $line = Select-String -Path "extension.yaml" -Pattern "^\s*Version\s*:" | Select-Object -First 1
+          if (-not $line) { throw "Version not found in extension.yaml" }
+          $version = ($line.Line -split ":", 2)[1].Trim()
+          if (-not $version) { throw "Parsed version is empty" }
+
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "TAG=v$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build (Release)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          msbuild "FastInstall.sln" /t:Rebuild /p:Configuration=Release /v:minimal
+
+      - name: Create .pext package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $releaseDir = Join-Path $PWD "bin\Release"
+          if (-not (Test-Path $releaseDir)) { throw "Release output folder not found: $releaseDir" }
+
+          $zipFile = Join-Path $PWD ("FastInstall_v{0}.zip" -f $env:VERSION)
+          $pextFile = Join-Path $PWD ("FastInstall_v{0}.pext" -f $env:VERSION)
+
+          if (Test-Path $zipFile) { Remove-Item $zipFile -Force }
+          if (Test-Path $pextFile) { Remove-Item $pextFile -Force }
+
+          Compress-Archive -Path (Join-Path $releaseDir "*") -DestinationPath $zipFile -Force
+          Rename-Item -Path $zipFile -NewName ("FastInstall_v{0}.pext" -f $env:VERSION)
+
+          if (-not (Test-Path $pextFile)) { throw ".pext was not created: $pextFile" }
+
+      - name: Create/Update GitHub Release and upload asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: FastInstall ${{ env.TAG }}
+          generate_release_notes: true
+          files: |
+            FastInstall_v${{ env.VERSION }}.pext

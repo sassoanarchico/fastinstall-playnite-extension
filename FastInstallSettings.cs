@@ -205,6 +205,32 @@ namespace FastInstall
         private ObservableCollection<FolderConfiguration> editingConfigurations;
         private FolderConfiguration selectedConfiguration;
 
+        /// <summary>
+        /// Version shown in the Settings UI.
+        /// Uses the built assembly version to stay in sync with the real plugin binary.
+        /// </summary>
+        public string PluginVersionDisplay
+        {
+            get
+            {
+                try
+                {
+                    var asmVersion = plugin?.GetType()?.Assembly?.GetName()?.Version;
+                    if (asmVersion != null)
+                    {
+                        // Show Major.Minor.Build (e.g. 0.1.5)
+                        return asmVersion.ToString(3);
+                    }
+                }
+                catch
+                {
+                    // Ignore and fall back
+                }
+
+                return FastInstallPlugin.PluginVersion;
+            }
+        }
+
         // Available platforms for dropdown
         private readonly List<string> availablePlatforms = new List<string>
         {
@@ -292,6 +318,9 @@ namespace FastInstall
                     Platform = "PC"
                 });
             }
+
+            // Ensure UI can display version
+            OnPropertyChanged(nameof(PluginVersionDisplay));
         }
 
         private void LoadAvailableEmulators()
