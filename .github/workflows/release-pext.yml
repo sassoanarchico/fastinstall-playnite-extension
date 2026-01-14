@@ -26,28 +26,35 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
 
-          $repo = "JosefNemec/Playnite"
-          $headers = @{
-            "Accept" = "application/vnd.github+json"
-            "User-Agent" = "fastinstall-ci"
+          # Use GitHub's stable "latest/download" URL first (no API required).
+          $zipPath = Join-Path $env:RUNNER_TEMP "PlayniteSDK.zip"
+          $urls = @(
+            "https://github.com/JosefNemec/Playnite/releases/latest/download/PlayniteSDK.zip",
+            "https://github.com/JosefNemec/Playnite/releases/latest/download/PlaynitePortable.zip"
+          )
+
+          $downloaded = $false
+          foreach ($u in $urls) {
+            try {
+              Write-Host "Trying: $u"
+              Invoke-WebRequest -Uri $u -OutFile $zipPath -UseBasicParsing
+              $downloaded = $true
+              break
+            } catch {
+              Write-Host "Failed: $u"
+            }
           }
 
-          $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -Headers $headers
-          $asset = $rel.assets | Where-Object { $_.name -match "PlaynitePortable.*\.zip$" } | Select-Object -First 1
-
-          if (-not $asset) {
-            throw "Could not find PlaynitePortable zip in latest Playnite release assets."
+          if (-not $downloaded) {
+            throw "Failed to download Playnite SDK zip from latest release."
           }
-
-          $zipPath = Join-Path $env:RUNNER_TEMP "PlaynitePortable.zip"
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath
 
           $extractDir = Join-Path $env:RUNNER_TEMP "playnite"
           if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
           Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
 
           $sdk = Get-ChildItem -Path $extractDir -Recurse -Filter "Playnite.SDK.dll" | Select-Object -First 1
-          if (-not $sdk) { throw "Playnite.SDK.dll not found in extracted PlaynitePortable zip." }
+          if (-not $sdk) { throw "Playnite.SDK.dll not found in extracted Playnite zip." }
 
           $destDir = Join-Path $env:LOCALAPPDATA "Playnite"
           New-Item -ItemType Directory -Force -Path $destDir | Out-Null
@@ -89,11 +96,20 @@ jobs:
 
           if (-not (Test-Path $pextFile)) { throw ".pext was not created: $pextFile" }
 
-      - name: Create/Update GitHub Release and upload asset
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.TAG }}
-          name: FastInstall ${{ env.TAG }}
-          generate_release_notes: true
-          files: |
-            FastInstall_v${{ env.VERSION }}.pext
+      - name: Create/Update GitHub Release and upload asset (clobber)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $tag = $env:TAG
+          $file = "FastInstall_v$($env:VERSION).pext"
+
+          # Create release if missing, otherwise keep it and just overwrite the asset.
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --title "FastInstall $tag" --generate-notes
+          }
+
+          gh release upload $tag $file --clobber
