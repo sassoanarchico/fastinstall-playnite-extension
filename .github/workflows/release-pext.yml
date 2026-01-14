@@ -41,18 +41,23 @@ jobs:
 
           # Prefer explicit SDK/Portable if present, otherwise fall back to full Playnite archive (e.g. 10.47.7z).
           # Some Playnite releases provide only installer + full archive; the full archive still contains Playnite.SDK.dll.
-          $wanted = @(
-            @{ Name = "SDK"; Pattern = "^PlayniteSDK.*\\.(zip|7z)$" },
-            @{ Name = "Portable"; Pattern = "^PlaynitePortable.*\\.(zip|7z)$" },
-            @{ Name = "FullArchive"; Pattern = "^[0-9]+(\\.[0-9]+)*\\.(zip|7z)$" }
-          )
-
           $assetToDownload = $null
-          foreach ($w in $wanted) {
-            $assetToDownload = $assetNames | Where-Object { $_ -match $w.Pattern } | Select-Object -First 1
+          
+          # Try SDK first
+          $assetToDownload = $assetNames | Where-Object { $_ -like "PlayniteSDK*" -and ($_ -like "*.zip" -or $_ -like "*.7z") } | Select-Object -First 1
+          if ($assetToDownload) {
+            Write-Host "Selected SDK asset: $assetToDownload"
+          } else {
+            # Try Portable
+            $assetToDownload = $assetNames | Where-Object { $_ -like "PlaynitePortable*" -and ($_ -like "*.zip" -or $_ -like "*.7z") } | Select-Object -First 1
             if ($assetToDownload) {
-              Write-Host "Selected $($w.Name) asset: $assetToDownload"
-              break
+              Write-Host "Selected Portable asset: $assetToDownload"
+            } else {
+              # Try versioned archive (e.g., 10.47.7z)
+              $assetToDownload = $assetNames | Where-Object { $_ -match '^\d+\.\d+\.(zip|7z)$' } | Select-Object -First 1
+              if ($assetToDownload) {
+                Write-Host "Selected versioned archive: $assetToDownload"
+              }
             }
           }
 
