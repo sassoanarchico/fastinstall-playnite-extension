@@ -43,7 +43,7 @@ namespace FastInstall
         private static readonly ILogger logger = LogManager.GetLogger();
         private FastInstallSettingsViewModel settingsViewModel;
 
-        public const string PluginVersion = "0.1.6";
+        public const string PluginVersion = "0.1.7";
         
         public override Guid Id { get; } = Guid.Parse("F8A1B2C3-D4E5-6789-ABCD-EF1234567890");
         public override string Name => "FastInstall";
@@ -665,6 +665,7 @@ namespace FastInstall
 
         /// <summary>
         /// Gets the source path for a game from the archive directory
+        /// Handles cases where game.Name was changed in Playnite but folder name is different
         /// </summary>
         public string GetSourcePath(Game game)
         {
@@ -674,7 +675,43 @@ namespace FastInstall
                 return null;
             }
 
-            return Path.Combine(config.SourcePath, game.Name);
+            // First try: use game.Name directly (works if name wasn't changed)
+            var directPath = Path.Combine(config.SourcePath, game.Name);
+            if (Directory.Exists(directPath))
+            {
+                return directPath;
+            }
+
+            // Second try: search for folder by detecting game files (handles renamed games)
+            logger.Debug($"FastInstall: Direct path not found for '{game.Name}', searching in '{config.SourcePath}'...");
+            
+            try
+            {
+                var directories = Directory.GetDirectories(config.SourcePath);
+                foreach (var dir in directories)
+                {
+                    // Check if this folder contains game files (PS3_GAME, EBOOT.BIN, etc.)
+                    var detected = DetectGameInfo(dir);
+                    if (detected != null && detected.GameType != GameType.Unknown)
+                    {
+                        // Verify this is the same game by checking if it would generate the same GameId
+                        var potentialGameId = GenerateGameId(config.SourcePath, detected.Name);
+                        if (potentialGameId == game.GameId)
+                        {
+                            logger.Info($"FastInstall: Found source folder for '{game.Name}' (renamed): '{detected.Name}'");
+                            return dir;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Warn(ex, $"FastInstall: Error searching for source folder for '{game.Name}'");
+            }
+
+            // Fallback: return the direct path anyway (will fail later with a clear error)
+            logger.Warn($"FastInstall: Could not find source folder for '{game.Name}' in '{config.SourcePath}'");
+            return directPath;
         }
 
         /// <summary>

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -311,17 +312,97 @@ namespace FastInstall
 
         private void CleanupPartialCopy(string destinationPath)
         {
+            if (string.IsNullOrWhiteSpace(destinationPath) || !Directory.Exists(destinationPath))
+            {
+                return;
+            }
+
+            // Run cleanup in background to avoid blocking
+            Task.Run(() =>
+            {
+                try
+                {
+                    logger.Info($"FastInstall: Starting cleanup of partial copy at '{destinationPath}'");
+                    
+                    // Show notification that cleanup is starting
+                    playniteApi.Notifications.Add(new NotificationMessage(
+                        $"FastInstall_Cleanup_{destinationPath.GetHashCode()}",
+                        "FastInstall: Cleaning up cancelled installation...",
+                        NotificationType.Info));
+
+                    // Use a more efficient deletion method for large directories
+                    DeleteDirectoryRecursive(destinationPath);
+
+                    logger.Info($"FastInstall: Successfully cleaned up partial copy at '{destinationPath}'");
+                }
+                catch (Exception ex)
+                {
+                    logger.Warn(ex, $"FastInstall: Could not clean up partial copy at '{destinationPath}'");
+                    playniteApi.Notifications.Add(new NotificationMessage(
+                        $"FastInstall_CleanupError_{destinationPath.GetHashCode()}",
+                        $"FastInstall: Could not clean up '{Path.GetFileName(destinationPath)}'. You may need to delete it manually.",
+                        NotificationType.Warning));
+                }
+            });
+        }
+
+        /// <summary>
+        /// Recursively deletes a directory more efficiently than Directory.Delete for large folders
+        /// </summary>
+        private void DeleteDirectoryRecursive(string path)
+        {
+            if (!Directory.Exists(path))
+            {
+                return;
+            }
+
             try
             {
-                if (Directory.Exists(destinationPath))
+                // Delete files first (faster than deleting directory tree)
+                var files = Directory.GetFiles(path, "*", SearchOption.AllDirectories);
+                foreach (var file in files)
                 {
-                    logger.Info($"FastInstall: Cleaning up partial copy at '{destinationPath}'");
-                    Directory.Delete(destinationPath, true);
+                    try
+                    {
+                        File.SetAttributes(file, FileAttributes.Normal); // Remove read-only if needed
+                        File.Delete(file);
+                    }
+                    catch
+                    {
+                        // Ignore individual file errors, continue with others
+                    }
                 }
+
+                // Delete directories (bottom-up)
+                var dirs = Directory.GetDirectories(path, "*", SearchOption.AllDirectories)
+                    .OrderByDescending(d => d.Length); // Delete deepest first
+                
+                foreach (var dir in dirs)
+                {
+                    try
+                    {
+                        Directory.Delete(dir, false);
+                    }
+                    catch
+                    {
+                        // Ignore individual directory errors
+                    }
+                }
+
+                // Finally delete the root directory
+                Directory.Delete(path, false);
             }
-            catch (Exception ex)
+            catch
             {
-                logger.Warn(ex, $"FastInstall: Could not clean up partial copy at '{destinationPath}'");
+                // Fallback to standard delete if optimized method fails
+                try
+                {
+                    Directory.Delete(path, true);
+                }
+                catch (Exception ex)
+                {
+                    throw new IOException($"Failed to delete directory: {ex.Message}", ex);
+                }
             }
         }
 
