@@ -341,7 +341,7 @@ namespace FastInstall
                     playniteApi.Notifications.Add(new NotificationMessage(
                         $"FastInstall_CleanupError_{destinationPath.GetHashCode()}",
                         $"FastInstall: Could not clean up '{Path.GetFileName(destinationPath)}'. You may need to delete it manually.",
-                        NotificationType.Warning));
+                        NotificationType.Error));
                 }
             });
         }
