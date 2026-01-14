@@ -39,6 +39,13 @@ bld/
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
 
+# Build output files in root
+*.dll
+*.pdb
+*.exe
+build_output.txt
+build.log
+
 # .NET Core
 project.lock.json
 project.fragment.lock.json

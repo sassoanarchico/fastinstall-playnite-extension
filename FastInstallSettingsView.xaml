@@ -4,43 +4,184 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d"
-             d:DesignHeight="300" d:DesignWidth="600">
+             d:DesignHeight="550" d:DesignWidth="950">
 
-    <StackPanel Margin="20">
-        <TextBlock Text="FastInstall Settings" FontSize="18" FontWeight="Bold" Margin="0,0,0,20"/>
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
-        <!-- Source Archive Directory (Slow HDD) -->
-        <TextBlock Text="Source Archive Directory (Slow HDD):" Margin="0,0,0,5"/>
-        <TextBlock Text="This is where your archived games are stored. Games will be copied FROM this location."
-                   FontSize="11" Opacity="0.7" Margin="0,0,0,5" TextWrapping="Wrap"/>
-        <DockPanel Margin="0,0,0,15">
-            <Button Content="Browse..." DockPanel.Dock="Right" Padding="15,5" Margin="10,0,0,0"
-                    Command="{Binding BrowseSourceArchiveCommand}"/>
-            <TextBox Text="{Binding Settings.SourceArchiveDirectory, UpdateSourceTrigger=PropertyChanged}"
-                     VerticalContentAlignment="Center" Padding="5"/>
-        </DockPanel>
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Text="FastInstall - Folder Configurations" 
+                       FontSize="18" 
+                       FontWeight="Bold"/>
+            <TextBlock Text=" v0.13" 
+                       FontSize="14" 
+                       VerticalAlignment="Bottom"
+                       Margin="5,0,0,2"
+                       Foreground="LimeGreen"
+                       FontWeight="Bold"/>
+        </StackPanel>
 
-        <!-- Fast Install Directory (SSD) -->
-        <TextBlock Text="Fast Install Directory (SSD):" Margin="0,0,0,5"/>
-        <TextBlock Text="This is where games will be installed/copied TO for fast access. Choose a folder on your SSD."
-                   FontSize="11" Opacity="0.7" Margin="0,0,0,5" TextWrapping="Wrap"/>
-        <DockPanel Margin="0,0,0,15">
-            <Button Content="Browse..." DockPanel.Dock="Right" Padding="15,5" Margin="10,0,0,0"
-                    Command="{Binding BrowseFastInstallCommand}"/>
-            <TextBox Text="{Binding Settings.FastInstallDirectory, UpdateSourceTrigger=PropertyChanged}"
-                     VerticalContentAlignment="Center" Padding="5"/>
-        </DockPanel>
+        <!-- Description -->
+        <TextBlock Grid.Row="1" 
+                   Text="Configure multiple source and destination folder pairs. Each enabled configuration will scan for games in the source folder and allow installation to the destination folder."
+                   TextWrapping="Wrap" 
+                   Margin="0,0,0,15"
+                   Opacity="0.8"/>
+
+        <!-- DataGrid -->
+        <DataGrid Grid.Row="2"
+                  ItemsSource="{Binding EditingConfigurations}"
+                  SelectedItem="{Binding SelectedConfiguration, Mode=TwoWay}"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  CanUserDeleteRows="False"
+                  SelectionMode="Single"
+                  HeadersVisibility="All"
+                  GridLinesVisibility="All"
+                  AlternatingRowBackground="#10000000"
+                  Margin="0,0,0,10">
+
+            <DataGrid.Columns>
+                <!-- Enabled Column -->
+                <DataGridCheckBoxColumn Header="Enabled" 
+                                        Width="70"
+                                        Binding="{Binding IsEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                <!-- Source Path Column -->
+                <DataGridTemplateColumn Header="Source Path (Archive HDD)" Width="2*">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <DockPanel>
+                                <Button Content="..." 
+                                        DockPanel.Dock="Right" 
+                                        Width="30" 
+                                        Margin="5,0,0,0"
+                                        Command="{Binding DataContext.BrowseSourceCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                        CommandParameter="{Binding}"/>
+                                <TextBox Text="{Binding SourcePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         VerticalContentAlignment="Center"
+                                         Padding="5,2"/>
+                            </DockPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Destination Path Column -->
+                <DataGridTemplateColumn Header="Destination Path (Fast SSD)" Width="2*">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <DockPanel>
+                                <Button Content="..." 
+                                        DockPanel.Dock="Right" 
+                                        Width="30" 
+                                        Margin="5,0,0,0"
+                                        Command="{Binding DataContext.BrowseDestinationCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                        CommandParameter="{Binding}"/>
+                                <TextBox Text="{Binding DestinationPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                         VerticalContentAlignment="Center"
+                                         Padding="5,2"/>
+                            </DockPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Platform Column -->
+                <DataGridTemplateColumn Header="Platform" Width="150">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ComboBox ItemsSource="{Binding DataContext.AvailablePlatforms, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                      SelectedItem="{Binding Platform, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      VerticalContentAlignment="Center"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Emulator Column -->
+                <DataGridTemplateColumn Header="Emulator (Optional)" Width="2.5*">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ComboBox ItemsSource="{Binding DataContext.AvailableEmulators, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                      DisplayMemberPath="DisplayName"
+                                      SelectedValuePath="SelectionKey"
+                                      SelectedValue="{Binding EmulatorSelectionKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      VerticalContentAlignment="Center"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="3" 
+                    Orientation="Horizontal" 
+                    Margin="0,0,0,15">
+            <Button Content="Add Configuration" 
+                    Padding="15,8" 
+                    Margin="0,0,10,0"
+                    Command="{Binding AddConfigurationCommand}"/>
+            <Button Content="Remove Selected" 
+                    Padding="15,8"
+                    Command="{Binding RemoveConfigurationCommand}"/>
+        </StackPanel>
 
         <!-- Info Box -->
-        <Border Background="#20808080" CornerRadius="5" Padding="15" Margin="0,10,0,0">
+        <Border Grid.Row="4" 
+                Background="#20808080" 
+                CornerRadius="5" 
+                Padding="15">
             <StackPanel>
-                <TextBlock Text="How it works:" FontWeight="Bold" Margin="0,0,0,5"/>
-                <TextBlock TextWrapping="Wrap" Text="1. Place your game folders in the Source Archive Directory."/>
-                <TextBlock TextWrapping="Wrap" Text="2. Each top-level subfolder will be detected as a separate game."/>
-                <TextBlock TextWrapping="Wrap" Text="3. When you 'Install' a game, it will be copied to the Fast Install Directory."/>
-                <TextBlock TextWrapping="Wrap" Text="4. When you 'Uninstall', the copy on the SSD is deleted (archive is preserved)."/>
+                <TextBlock Text="Configuration Guide:" FontWeight="Bold" Margin="0,0,0,8"/>
+                
+                <TextBlock TextWrapping="Wrap" Margin="0,0,0,5">
+                    <Run Text="• " FontWeight="Bold"/>
+                    <Run Text="Enabled: Check to activate this configuration. Unchecked configurations will be ignored."/>
+                </TextBlock>
+                
+                <TextBlock TextWrapping="Wrap" Margin="0,0,0,5">
+                    <Run Text="• " FontWeight="Bold"/>
+                    <Run Text="Source Path: Folder on your slow HDD where game archives are stored."/>
+                </TextBlock>
+                
+                <TextBlock TextWrapping="Wrap" Margin="0,0,0,5">
+                    <Run Text="• " FontWeight="Bold"/>
+                    <Run Text="Destination Path: Folder on your fast SSD where games will be copied for installation."/>
+                </TextBlock>
+                
+                <TextBlock TextWrapping="Wrap" Margin="0,0,0,5">
+                    <Run Text="• " FontWeight="Bold"/>
+                    <Run Text="Platform: Type of games in this folder (affects auto-detection and play actions)."/>
+                </TextBlock>
+                
+                <TextBlock TextWrapping="Wrap" Margin="0,0,0,10">
+                    <Run Text="• " FontWeight="Bold"/>
+                    <Run Text="Emulator: (Optional) Select an emulator configured in Playnite. Leave as '(None / Auto-detect)' to use auto-detection or Playnite's default emulator for the platform."/>
+                </TextBlock>
+
+                <Separator Margin="0,5,0,10"/>
+
+                <TextBlock Text="Supported Platforms:" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.9">
+                    PC • PlayStation 3 (RPCS3) • PlayStation 2 (PCSX2) • PSP (PPSSPP) • Nintendo Switch (Ryujinx/Yuzu) • Wii U (Cemu) • Wii/GameCube (Dolphin) • Xbox 360 (Xenia)
+                </TextBlock>
+                
+                <TextBlock Text="Configure Emulators:" FontWeight="Bold" Margin="0,10,0,5"/>
+                <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.9">
+                    Go to Playnite → Settings → Emulation to add or configure emulators. Once configured, they will appear in the dropdown list above.
+                </TextBlock>
+                
+                <Separator Margin="0,10,0,10"/>
+                
+                <TextBlock HorizontalAlignment="Right" FontSize="12" Foreground="LimeGreen" FontWeight="Bold">
+                    Version: 0.13
+                </TextBlock>
             </StackPanel>
         </Border>
-    </StackPanel>
+    </Grid>
 </UserControl>
-
