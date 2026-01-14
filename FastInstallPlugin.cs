@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Windows.Controls;
 using Playnite.SDK;
 using Playnite.SDK.Models;
@@ -43,7 +44,7 @@ namespace FastInstall
         private static readonly ILogger logger = LogManager.GetLogger();
         private FastInstallSettingsViewModel settingsViewModel;
 
-        public const string PluginVersion = "0.1.7";
+        public const string PluginVersion = "0.1.9";
         
         public override Guid Id { get; } = Guid.Parse("F8A1B2C3-D4E5-6789-ABCD-EF1234567890");
         public override string Name => "FastInstall";
@@ -606,13 +607,48 @@ namespace FastInstall
 
         /// <summary>
         /// Generates a consistent game ID from the source path and game name
+        /// Uses normalized paths to ensure consistency
         /// </summary>
         public string GenerateGameId(string sourcePath, string gameName)
         {
-            // Include source path hash to avoid collisions between different configurations
-            var sourceHash = sourcePath.GetHashCode().ToString("X8");
+            // Normalize path to ensure consistent hashing (handle trailing slashes, case, etc.)
+            var normalizedPath = Path.GetFullPath(sourcePath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var sourceHash = normalizedPath.GetHashCode().ToString("X8");
             var cleanName = gameName.ToLowerInvariant().Replace(" ", "_");
             return $"fastinstall_{sourceHash}_{cleanName}";
+        }
+
+        /// <summary>
+        /// Sanitizes a file/folder name by removing invalid characters for Windows paths
+        /// Replaces invalid characters with safe alternatives
+        /// </summary>
+        public string SanitizeFileName(string fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                return fileName;
+            }
+
+            // Characters invalid in Windows file/folder names: < > : " | ? * \
+            // Also remove control characters
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var sanitized = fileName;
+
+            // Replace invalid characters with safe alternatives
+            foreach (var invalidChar in invalidChars)
+            {
+                sanitized = sanitized.Replace(invalidChar, '_');
+            }
+
+            // Also handle common problematic characters
+            sanitized = sanitized.Replace(':', '-'); // Replace colon with dash (common in game titles)
+            sanitized = sanitized.Trim(); // Remove leading/trailing spaces
+            sanitized = sanitized.TrimEnd('.'); // Remove trailing dots (not allowed in Windows)
+
+            // Remove any remaining control characters
+            sanitized = new string(sanitized.Where(c => !char.IsControl(c)).ToArray());
+
+            return sanitized;
         }
 
         /// <summary>
@@ -647,6 +683,28 @@ namespace FastInstall
                     {
                         return config;
                     }
+
+                    // If renamed in Playnite, try to find folder by matching GameId (more efficient: just compare GameIds)
+                    try
+                    {
+                        var dirs = Directory.GetDirectories(src);
+                        var normalizedSrc = Path.GetFullPath(src).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                        
+                        foreach (var dir in dirs)
+                        {
+                            var folderName = Path.GetFileName(dir);
+                            var potentialGameId = GenerateGameId(normalizedSrc, folderName);
+                            if (potentialGameId == game.GameId)
+                            {
+                                logger.Debug($"FastInstall: Found config match for '{game.Name}' via GameId match with folder '{folderName}'");
+                                return config;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Warn(ex, $"FastInstall: Error searching archive folders for config match for '{game.Name}'");
+                    }
                 }
 
                 // Match by destination directory even if not installed flag
@@ -657,6 +715,30 @@ namespace FastInstall
                     {
                         return config;
                     }
+
+                    // If renamed in Playnite, try to find by matching GameId in destination
+                    try
+                    {
+                        var dirs = Directory.GetDirectories(dst);
+                        // Use source path for GameId generation if available (GameId is based on source path), otherwise destination
+                        var basePath = !string.IsNullOrWhiteSpace(src) ? src : dst;
+                        var normalizedBasePath = Path.GetFullPath(basePath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                        
+                        foreach (var dir in dirs)
+                        {
+                            var folderName = Path.GetFileName(dir);
+                            var potentialGameId = GenerateGameId(normalizedBasePath, folderName);
+                            if (potentialGameId == game.GameId)
+                            {
+                                logger.Debug($"FastInstall: Found config match for '{game.Name}' via GameId match in destination folder '{folderName}'");
+                                return config;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Warn(ex, $"FastInstall: Error searching destination folders for config match for '{game.Name}'");
+                    }
                 }
             }
 
@@ -665,13 +747,14 @@ namespace FastInstall
 
         /// <summary>
         /// Gets the source path for a game from the archive directory
-        /// Handles cases where game.Name was changed in Playnite but folder name is different
+        /// Handles cases where game.Name was changed in Playnite but folder name is different (e.g., PS3 games with codes like [BLUS12345])
         /// </summary>
         public string GetSourcePath(Game game)
         {
             var config = GetGameConfiguration(game);
             if (config == null || string.IsNullOrWhiteSpace(config.SourcePath))
             {
+                logger.Warn($"FastInstall: No configuration found for game '{game.Name}' (GameId: {game.GameId})");
                 return null;
             }
 
@@ -679,26 +762,71 @@ namespace FastInstall
             var directPath = Path.Combine(config.SourcePath, game.Name);
             if (Directory.Exists(directPath))
             {
+                logger.Debug($"FastInstall: Found source path using direct name match: '{directPath}'");
                 return directPath;
             }
 
-            // Second try: search for folder by detecting game files (handles renamed games)
-            logger.Debug($"FastInstall: Direct path not found for '{game.Name}', searching in '{config.SourcePath}'...");
+            // Second try: search for folder by matching GameId (handles renamed games, PS3 codes, etc.)
+            logger.Debug($"FastInstall: Direct path not found for '{game.Name}', searching by GameId in '{config.SourcePath}'...");
+            logger.Debug($"FastInstall: Looking for GameId: '{game.GameId}'");
             
             try
             {
                 var directories = Directory.GetDirectories(config.SourcePath);
+                logger.Debug($"FastInstall: Scanning {directories.Length} folders to find match for GameId '{game.GameId}'");
+                
+                // Normalize source path for consistent GameId generation
+                var normalizedSourcePath = Path.GetFullPath(config.SourcePath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                
                 foreach (var dir in directories)
                 {
-                    // Check if this folder contains game files (PS3_GAME, EBOOT.BIN, etc.)
-                    var detected = DetectGameInfo(dir);
-                    if (detected != null && detected.GameType != GameType.Unknown)
+                    var folderName = Path.GetFileName(dir);
+                    
+                    // Generate GameId for this folder and compare with the game's GameId
+                    var potentialGameId = GenerateGameId(normalizedSourcePath, folderName);
+                    
+                    if (potentialGameId == game.GameId)
                     {
-                        // Verify this is the same game by checking if it would generate the same GameId
-                        var potentialGameId = GenerateGameId(config.SourcePath, detected.Name);
-                        if (potentialGameId == game.GameId)
+                        logger.Info($"FastInstall: Found source folder for '{game.Name}' (folder name: '{folderName}') via GameId match");
+                        return dir;
+                    }
+                }
+                
+                // Log all potential GameIds for debugging
+                logger.Debug($"FastInstall: Scanned folders, no GameId match found. Sample GameIds from folders:");
+                foreach (var dir in directories.Take(5)) // Log first 5 for debugging
+                {
+                    var folderName = Path.GetFileName(dir);
+                    var sampleGameId = GenerateGameId(normalizedSourcePath, folderName);
+                    logger.Debug($"FastInstall:   Folder '{folderName}' -> GameId '{sampleGameId}'");
+                }
+                
+                logger.Warn($"FastInstall: No folder found matching GameId '{game.GameId}' for game '{game.Name}' in '{config.SourcePath}'");
+                
+                // Fallback: try fuzzy name matching (ignore codes in brackets like [BLUS12345])
+                logger.Debug($"FastInstall: Trying fuzzy name match for '{game.Name}'...");
+                var gameNameClean = game.Name.ToLowerInvariant().Trim();
+                
+                foreach (var dir in directories)
+                {
+                    var folderName = Path.GetFileName(dir);
+                    var folderNameClean = folderName.ToLowerInvariant().Trim();
+                    
+                    // Remove codes in brackets for comparison (e.g., "Game [BLUS12345]" -> "Game")
+                    var folderNameWithoutCode = Regex.Replace(folderNameClean, @"\s*\[.*?\]\s*", "").Trim();
+                    var gameNameWithoutCode = Regex.Replace(gameNameClean, @"\s*\[.*?\]\s*", "").Trim();
+                    
+                    // Check if names match (with or without codes)
+                    if (folderNameWithoutCode == gameNameWithoutCode || 
+                        folderNameClean == gameNameClean ||
+                        folderNameClean.StartsWith(gameNameClean) || 
+                        gameNameClean.StartsWith(folderNameWithoutCode))
+                    {
+                        // Verify it's a game folder
+                        var detected = DetectGameInfo(dir);
+                        if (detected != null)
                         {
-                            logger.Info($"FastInstall: Found source folder for '{game.Name}' (renamed): '{detected.Name}'");
+                            logger.Info($"FastInstall: Found source folder for '{game.Name}' via fuzzy name match: '{folderName}'");
                             return dir;
                         }
                     }
@@ -706,16 +834,17 @@ namespace FastInstall
             }
             catch (Exception ex)
             {
-                logger.Warn(ex, $"FastInstall: Error searching for source folder for '{game.Name}'");
+                logger.Error(ex, $"FastInstall: Error searching for source folder for '{game.Name}' in '{config.SourcePath}'");
             }
 
-            // Fallback: return the direct path anyway (will fail later with a clear error)
-            logger.Warn($"FastInstall: Could not find source folder for '{game.Name}' in '{config.SourcePath}'");
+            // Final fallback: return the direct path anyway (will fail later with a clear error)
+            logger.Warn($"FastInstall: Could not find source folder for '{game.Name}' in '{config.SourcePath}'. Returning direct path (will likely fail).");
             return directPath;
         }
 
         /// <summary>
         /// Gets the destination path for a game in the fast install directory
+        /// Sanitizes the game name to ensure valid Windows path
         /// </summary>
         public string GetDestinationPath(Game game)
         {
@@ -725,7 +854,9 @@ namespace FastInstall
                 return null;
             }
 
-            return Path.Combine(config.DestinationPath, game.Name);
+            // Sanitize game name to avoid invalid characters in path (e.g., ":" in "Ratchet and Clank: All 4 One")
+            var sanitizedName = SanitizeFileName(game.Name);
+            return Path.Combine(config.DestinationPath, sanitizedName);
         }
 
         /// <summary>

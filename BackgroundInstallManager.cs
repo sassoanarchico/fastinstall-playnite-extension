@@ -244,13 +244,22 @@ namespace FastInstall
                         }));
                     });
 
-                    // Show notification
+                    // Show notification in Italian
                     playniteApi.Notifications.Add(new NotificationMessage(
                         $"FastInstall_Complete_{job.Game.Id}",
-                        $"'{job.Game.Name}' has been installed successfully!",
+                        $"Installazione del gioco {job.Game.Name} completata",
                         NotificationType.Info));
 
                     logger.Info($"FastInstall: Successfully installed '{job.Game.Name}'");
+
+                    // Close the progress window automatically after a short delay (2 seconds)
+                    _ = Task.Delay(2000).ContinueWith(_ =>
+                    {
+                        playniteApi.MainView.UIDispatcher.Invoke(() =>
+                        {
+                            job.ProgressWindow?.Close();
+                        });
+                    });
                 }
             }
             catch (OperationCanceledException)
