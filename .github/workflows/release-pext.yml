@@ -32,40 +32,52 @@ jobs:
           $repo = "JosefNemec/Playnite"
           $tmp = $env:RUNNER_TEMP
 
-          Write-Host "Downloading Playnite SDK from $repo ..."
-          Push-Location $tmp
-          try {
-            # Prefer SDK zip; fallback to Portable zip (we'll search for Playnite.SDK.dll after extraction).
-            $downloaded = $false
+          Write-Host "Querying latest Playnite release assets from $repo ..."
+          $assetNames = gh api "repos/$repo/releases/latest" --jq ".assets[].name"
+          if (-not $assetNames) { throw "No assets returned from releases/latest." }
 
-            try {
-              gh release download --repo $repo --pattern "PlayniteSDK*.zip" --dir $tmp
-              $downloaded = $true
-            } catch {
-              Write-Host "PlayniteSDK*.zip not downloaded, trying portable..."
+          Write-Host "Assets:"
+          $assetNames | ForEach-Object { Write-Host "  - $_" }
+
+          # Prefer SDK, fallback to Portable. Accept .zip or .7z.
+          $wanted = @(
+            @{ Name = "SDK"; Pattern = "^PlayniteSDK.*\\.(zip|7z)$" },
+            @{ Name = "Portable"; Pattern = "^PlaynitePortable.*\\.(zip|7z)$" }
+          )
+
+          $assetToDownload = $null
+          foreach ($w in $wanted) {
+            $assetToDownload = $assetNames | Where-Object { $_ -match $w.Pattern } | Select-Object -First 1
+            if ($assetToDownload) {
+              Write-Host "Selected $($w.Name) asset: $assetToDownload"
+              break
             }
-
-            if (-not $downloaded) {
-              gh release download --repo $repo --pattern "PlaynitePortable*.zip" --dir $tmp
-              $downloaded = $true
-            }
-
-            if (-not $downloaded) { throw "Failed to download Playnite release zip via gh." }
-          } finally {
-            Pop-Location
           }
 
-          $zipPath = Get-ChildItem -Path $tmp -Filter "PlayniteSDK*.zip" | Select-Object -First 1
-          if (-not $zipPath) {
-            $zipPath = Get-ChildItem -Path $tmp -Filter "PlaynitePortable*.zip" | Select-Object -First 1
+          if (-not $assetToDownload) {
+            throw "Could not find PlayniteSDK/PlaynitePortable asset (zip/7z) in latest release."
           }
-          if (-not $zipPath) { throw "Downloaded zip not found in runner temp." }
 
-          Write-Host "Using zip: $($zipPath.FullName)"
+          Write-Host "Downloading asset via gh..."
+          gh release download --repo $repo --pattern $assetToDownload --dir $tmp --clobber
+
+          $archivePath = Join-Path $tmp $assetToDownload
+          if (-not (Test-Path $archivePath)) { throw "Downloaded archive not found: $archivePath" }
+
+          Write-Host "Downloaded: $archivePath"
 
           $extractDir = Join-Path $env:RUNNER_TEMP "playnite"
           if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
-          Expand-Archive -Path $zipPath.FullName -DestinationPath $extractDir -Force
+
+          if ($archivePath.ToLowerInvariant().EndsWith(".zip")) {
+            Expand-Archive -Path $archivePath -DestinationPath $extractDir -Force
+          } elseif ($archivePath.ToLowerInvariant().EndsWith(".7z")) {
+            $sevenZip = Get-Command "7z" -ErrorAction SilentlyContinue
+            if (-not $sevenZip) { throw "7z not found on runner; cannot extract .7z asset." }
+            & 7z x $archivePath ("-o$extractDir") -y | Out-Null
+          } else {
+            throw "Unsupported archive type: $archivePath"
+          }
 
           $sdk = Get-ChildItem -Path $extractDir -Recurse -Filter "Playnite.SDK.dll" | Select-Object -First 1
           if (-not $sdk) { throw "Playnite.SDK.dll not found in extracted Playnite zip." }
