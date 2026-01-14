@@ -49,6 +49,9 @@ build.log
 # Playnite extension packages
 *.pext
 
+# Local release checklog (not committed)
+checklog.txt
+
 # .NET Core
 project.lock.json
 project.fragment.lock.json

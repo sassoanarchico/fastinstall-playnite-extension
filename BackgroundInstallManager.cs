@@ -44,7 +44,9 @@ namespace FastInstall
         private static readonly object lockObj = new object();
         
         private readonly ConcurrentDictionary<Guid, InstallationJob> activeInstallations;
+        private readonly ConcurrentQueue<InstallationJob> installQueue;
         private readonly IPlayniteAPI playniteApi;
+        private bool isProcessingQueue;
 
         public static BackgroundInstallManager Instance
         {
@@ -73,6 +75,8 @@ namespace FastInstall
         {
             playniteApi = api;
             activeInstallations = new ConcurrentDictionary<Guid, InstallationJob>();
+            installQueue = new ConcurrentQueue<InstallationJob>();
+            isProcessingQueue = false;
         }
 
         /// <summary>
@@ -117,21 +121,68 @@ namespace FastInstall
 
             activeInstallations[game.Id] = job;
 
+            bool willStartImmediately;
+            lock (lockObj)
+            {
+                // If nothing is processing and queue is empty, this job will start right away.
+                willStartImmediately = !isProcessingQueue && installQueue.IsEmpty;
+                installQueue.Enqueue(job);
+
+                if (!isProcessingQueue)
+                {
+                    isProcessingQueue = true;
+                    Task.Run(ProcessQueue);
+                }
+            }
+
             // Create and show progress window on UI thread
             playniteApi.MainView.UIDispatcher.Invoke(() =>
             {
                 job.ProgressWindow = new InstallationProgressWindow(
                     game.Name,
                     cts,
-                    () => CancelInstallation(game.Id));
+                    () => CancelInstallation(game.Id),
+                    startQueued: !willStartImmediately);
                 
                 job.ProgressWindow.Show();
             });
 
-            // Start the installation in background
-            Task.Run(() => ExecuteInstallation(job));
+            logger.Info($"FastInstall: Queued background installation for '{game.Name}' (willStartImmediately={willStartImmediately})");
+        }
 
-            logger.Info($"FastInstall: Started background installation for '{game.Name}'");
+        /// <summary>
+        /// Processes installation jobs sequentially from the queue.
+        /// </summary>
+        private async Task ProcessQueue()
+        {
+            try
+            {
+                while (installQueue.TryDequeue(out var job))
+                {
+                    // If user cancelled before this job started, mark as cancelled and update UI.
+                    if (job.CancellationTokenSource.IsCancellationRequested)
+                    {
+                        job.Status = InstallationStatus.Cancelled;
+                        playniteApi.MainView.UIDispatcher.Invoke(() =>
+                        {
+                            job.ProgressWindow?.ShowCancelled();
+                            job.ProgressWindow?.AllowClose();
+                        });
+                        logger.Info($"FastInstall: Skipping queued job for '{job.Game.Name}' because it was cancelled before start.");
+                        continue;
+                    }
+
+                    logger.Info($"FastInstall: Starting queued installation for '{job.Game.Name}'");
+                    await ExecuteInstallation(job);
+                }
+            }
+            finally
+            {
+                lock (lockObj)
+                {
+                    isProcessingQueue = false;
+                }
+            }
         }
 
         private async Task ExecuteInstallation(InstallationJob job)

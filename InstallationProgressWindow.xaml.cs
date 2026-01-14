@@ -14,7 +14,7 @@ namespace FastInstall
         private readonly Action onCancelRequested;
         private bool isCompleted = false;
 
-        public InstallationProgressWindow(string gameName, CancellationTokenSource cts, Action onCancel = null)
+        public InstallationProgressWindow(string gameName, CancellationTokenSource cts, Action onCancel = null, bool startQueued = false)
         {
             InitializeComponent();
             
@@ -22,7 +22,7 @@ namespace FastInstall
             onCancelRequested = onCancel;
             
             GameNameText.Text = gameName;
-            StatusText.Text = "Preparing to copy files...";
+            StatusText.Text = startQueued ? "Queued for installation..." : "Preparing to copy files...";
             
             // Handle window closing
             Closing += OnWindowClosing;
