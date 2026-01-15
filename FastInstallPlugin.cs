@@ -46,7 +46,7 @@ namespace FastInstall
         private static readonly ILogger logger = LogManager.GetLogger();
         private FastInstallSettingsViewModel settingsViewModel;
 
-        public const string PluginVersion = "0.4.3";
+        public const string PluginVersion = "0.5.2";
         
         public override Guid Id { get; } = Guid.Parse("F8A1B2C3-D4E5-6789-ABCD-EF1234567890");
         public override string Name => "FastInstall";
@@ -65,6 +65,9 @@ namespace FastInstall
             
             // Initialize the background install manager
             BackgroundInstallManager.Initialize(api);
+            
+            // Apply max parallel downloads setting
+            BackgroundInstallManager.Instance?.SetMaxParallelInstalls(settingsViewModel.Settings.EffectiveMaxParallelDownloads);
         }
         
         /// <summary>

@@ -134,6 +134,16 @@
                     Background="#555555"
                     Foreground="White"
                     BorderThickness="0"/>
+            <Button x:Name="PauseButton" 
+                    Content="Pause" 
+                    Width="90" 
+                    Height="30"
+                    Margin="0,0,10,0"
+                    Click="PauseButton_Click"
+                    Background="#FF9800"
+                    Foreground="White"
+                    BorderThickness="0"
+                    Visibility="Collapsed"/>
             <Button x:Name="CancelButton" 
                     Content="Cancel" 
                     Width="90" 

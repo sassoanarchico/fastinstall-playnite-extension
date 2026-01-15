@@ -26,12 +26,14 @@ namespace FastInstall
         public Action OnCancelled { get; set; }
         public DateTime StartTime { get; set; }
         public InstallationStatus Status { get; set; }
+        public bool IsPaused { get; set; } // Flag to distinguish pause from cancellation
     }
 
     public enum InstallationStatus
     {
         Pending,
         InProgress,
+        Paused,
         Completed,
         Failed,
         Cancelled
@@ -48,17 +50,19 @@ namespace FastInstall
         
         private readonly ConcurrentDictionary<Guid, InstallationJob> activeInstallations;
         private readonly ConcurrentQueue<InstallationJob> installQueue;
-        private readonly IPlayniteAPI playniteApi;
-        private bool isProcessingQueue;
+        private readonly IPlayniteAPI playniteAPI;
+        private SemaphoreSlim parallelInstallSemaphore;
+        private int maxParallelInstalls = 1; // Default: sequential
+        private readonly object settingsLock = new object();
+        private Task queueProcessorTask;
+        private readonly object queueProcessorLock = new object();
 
         public static BackgroundInstallManager Instance
         {
             get
             {
-                if (instance == null)
-                {
-                    throw new InvalidOperationException("BackgroundInstallManager not initialized. Call Initialize() first.");
-                }
+                // Return null if not initialized instead of throwing exception
+                // This allows UI code to safely check if instance is available
                 return instance;
             }
         }
@@ -76,10 +80,54 @@ namespace FastInstall
 
         private BackgroundInstallManager(IPlayniteAPI api)
         {
-            playniteApi = api;
+            playniteAPI = api;
             activeInstallations = new ConcurrentDictionary<Guid, InstallationJob>();
             installQueue = new ConcurrentQueue<InstallationJob>();
-            isProcessingQueue = false;
+            parallelInstallSemaphore = new SemaphoreSlim(maxParallelInstalls, maxParallelInstalls);
+        }
+
+        /// <summary>
+        /// Sets the maximum number of parallel installations
+        /// </summary>
+        public void SetMaxParallelInstalls(int maxParallel)
+        {
+            if (maxParallel < 1) maxParallel = 1;
+            
+            lock (settingsLock)
+            {
+                var oldMax = maxParallelInstalls;
+                maxParallelInstalls = maxParallel;
+                
+                // Recreate semaphore with new capacity
+                // This is the safest way to ensure the semaphore matches the new limit
+                var oldSemaphore = parallelInstallSemaphore;
+                parallelInstallSemaphore = new SemaphoreSlim(maxParallel, maxParallel);
+                
+                // Dispose old semaphore after a delay to let current operations finish
+                Task.Run(async () =>
+                {
+                    await Task.Delay(1000);
+                    try
+                    {
+                        oldSemaphore?.Dispose();
+                    }
+                    catch
+                    {
+                        // Ignore disposal errors
+                    }
+                });
+            }
+            
+            logger.Info($"FastInstall: Max parallel installations set to {maxParallel}");
+            
+            // Restart queue processing if there are jobs waiting
+            lock (queueProcessorLock)
+            {
+                if (installQueue.Count > 0 && (queueProcessorTask == null || queueProcessorTask.IsCompleted))
+                {
+                    queueProcessorTask = Task.Run(ProcessQueue);
+                }
+            }
         }
 
         /// <summary>
@@ -102,7 +150,7 @@ namespace FastInstall
         {
             if (IsInstalling(game.Id))
             {
-                playniteApi.Dialogs.ShowMessage(
+                playniteAPI.Dialogs.ShowMessage(
                     $"'{game.Name}' is already being installed.",
                     "Installation in Progress",
                     MessageBoxButton.OK,
@@ -125,97 +173,185 @@ namespace FastInstall
             };
 
             activeInstallations[game.Id] = job;
-
-            bool willStartImmediately;
-            lock (lockObj)
-            {
-                // If nothing is processing and queue is empty, this job will start right away.
-                willStartImmediately = !isProcessingQueue && installQueue.IsEmpty;
-                installQueue.Enqueue(job);
-
-                if (!isProcessingQueue)
-                {
-                    isProcessingQueue = true;
-                    Task.Run(ProcessQueue);
-                }
-            }
+            installQueue.Enqueue(job);
 
             // Create and show progress window on UI thread
-            playniteApi.MainView.UIDispatcher.Invoke(() =>
+            playniteAPI.MainView.UIDispatcher.Invoke(() =>
             {
                 job.ProgressWindow = new InstallationProgressWindow(
                     game.Name,
                     cts,
                     () => CancelInstallation(game.Id),
-                    startQueued: !willStartImmediately);
+                    () => PauseInstallation(game.Id),
+                    () => ResumeInstallation(game.Id),
+                    startQueued: true);
                 
                 job.ProgressWindow.Show();
             });
 
-            logger.Info($"FastInstall: Queued background installation for '{game.Name}' (willStartImmediately={willStartImmediately})");
+            // Start processing queue if not already running
+            Task.Run(ProcessQueue);
+
+            logger.Info($"FastInstall: Queued background installation for '{game.Name}'");
         }
 
         /// <summary>
-        /// Processes installation jobs sequentially from the queue.
+        /// Processes installation jobs from the queue with parallel support.
         /// </summary>
         private async Task ProcessQueue()
         {
+            var activeTasks = new List<Task>();
+            
             try
             {
-                while (installQueue.TryDequeue(out var job))
+                while (true)
                 {
-                    // If user cancelled before this job started, mark as cancelled and update UI.
-                    if (job.CancellationTokenSource.IsCancellationRequested)
+                    // Remove completed tasks
+                    activeTasks.RemoveAll(t => t.IsCompleted);
+                    
+                    // Check if we can start more installations
+                    int currentRunning = activeTasks.Count;
+                    int maxParallel;
+                    lock (settingsLock)
                     {
-                        job.Status = InstallationStatus.Cancelled;
+                        maxParallel = maxParallelInstalls;
+                    }
+                    
+                    if (currentRunning < maxParallel)
+                    {
+                        // Try to get a job from queue
+                        InstallationJob job = null;
+                        var tempQueue = new Queue<InstallationJob>();
                         
-                        // Remove from active installations immediately
-                        activeInstallations.TryRemove(job.Game.Id, out _);
-                        
-                        // Update UI - show cancelled but don't show "Cleaning up" since nothing was copied
-                        playniteApi.MainView.UIDispatcher.Invoke(() =>
+                        // Look for a non-paused job
+                        while (installQueue.TryDequeue(out var candidateJob))
                         {
-                            if (job.ProgressWindow != null)
+                            if (candidateJob.Status == InstallationStatus.Paused)
                             {
-                                job.ProgressWindow.StatusText.Text = "Installation cancelled";
-                                job.ProgressWindow.StatusText.Foreground = System.Windows.Media.Brushes.Orange;
-                                job.ProgressWindow.CancelButton.Content = "Close";
-                                job.ProgressWindow.CancelButton.Background = System.Windows.Media.Brushes.Gray;
-                                job.ProgressWindow.AllowClose();
+                                // Re-queue paused jobs
+                                tempQueue.Enqueue(candidateJob);
+                            }
+                            else if (job == null)
+                            {
+                                job = candidateJob;
+                            }
+                            else
+                            {
+                                tempQueue.Enqueue(candidateJob);
+                            }
+                        }
+                        
+                        // Re-queue all items back
+                        while (tempQueue.Count > 0)
+                        {
+                            installQueue.Enqueue(tempQueue.Dequeue());
+                        }
+                        
+                        if (job == null)
+                        {
+                            // No non-paused jobs available
+                            await Task.Delay(500);
+                            continue;
+                        }
+                        
+                        // Check if job was cancelled before starting
+                        if (job.CancellationTokenSource.IsCancellationRequested && !job.IsPaused)
+                        {
+                            HandleCancelledQueuedJob(job);
+                            continue;
+                        }
+                        
+                        // If job is paused, skip it (it will be processed when resumed)
+                        if (job.IsPaused || job.Status == InstallationStatus.Paused)
+                        {
+                            // Re-queue paused jobs
+                            installQueue.Enqueue(job);
+                            await Task.Delay(100);
+                            continue;
+                        }
+                        
+                        // Start installation task
+                        // Capture semaphore reference to avoid issues if it's recreated
+                        var semaphore = parallelInstallSemaphore;
+                        var installTask = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await semaphore.WaitAsync();
+                                await ExecuteInstallation(job);
+                            }
+                            finally
+                            {
+                                semaphore.Release();
                             }
                         });
                         
-                        // Notify controller that installation was cancelled
-                        job.OnCancelled?.Invoke();
-                        
-                        // Close the progress window automatically after a short delay (2 seconds)
-                        _ = Task.Delay(2000).ContinueWith(_ =>
-                        {
-                            playniteApi.MainView.UIDispatcher.Invoke(() =>
-                            {
-                                job.ProgressWindow?.Close();
-                            });
-                        });
-                        
-                        logger.Info($"FastInstall: Skipping queued job for '{job.Game.Name}' because it was cancelled before start.");
-                        continue;
+                        activeTasks.Add(installTask);
+                        logger.Info($"FastInstall: Starting queued installation for '{job.Game.Name}' ({currentRunning + 1}/{maxParallel} parallel)");
                     }
-
-                    logger.Info($"FastInstall: Starting queued installation for '{job.Game.Name}'");
-                    await ExecuteInstallation(job);
+                    else if (installQueue.IsEmpty && activeTasks.Count == 0)
+                    {
+                        // No more work to do
+                        break;
+                    }
+                    else
+                    {
+                        // Wait a bit before checking again
+                        await Task.Delay(100);
+                    }
                 }
             }
-            finally
+            catch (Exception ex)
             {
-                lock (lockObj)
-                {
-                    isProcessingQueue = false;
-                }
+                logger.Error(ex, "FastInstall: Error in ProcessQueue");
             }
+            
+            // Wait for all active tasks to complete
+            if (activeTasks.Count > 0)
+            {
+                await Task.WhenAll(activeTasks);
+            }
+        }
+
+        private void HandleCancelledQueuedJob(InstallationJob job)
+        {
+            job.Status = InstallationStatus.Cancelled;
+            
+            // Remove from active installations immediately
+            activeInstallations.TryRemove(job.Game.Id, out _);
+            
+            // Update UI - show cancelled but don't show "Cleaning up" since nothing was copied
+            playniteAPI.MainView.UIDispatcher.Invoke(() =>
+            {
+                if (job.ProgressWindow != null)
+                {
+                    job.ProgressWindow.StatusText.Text = "Installation cancelled";
+                    job.ProgressWindow.StatusText.Foreground = System.Windows.Media.Brushes.Orange;
+                    job.ProgressWindow.CancelButton.Content = "Close";
+                    job.ProgressWindow.CancelButton.Background = System.Windows.Media.Brushes.Gray;
+                    job.ProgressWindow.AllowClose();
+                }
+            });
+            
+            // Notify controller that installation was cancelled
+            job.OnCancelled?.Invoke();
+            
+            // Close the progress window automatically after a short delay (2 seconds)
+            _ = Task.Delay(2000).ContinueWith(_ =>
+            {
+                playniteAPI.MainView.UIDispatcher.Invoke(() =>
+                {
+                    job.ProgressWindow?.Close();
+                });
+            });
+            
+            logger.Info($"FastInstall: Skipping queued job for '{job.Game.Name}' because it was cancelled before start.");
         }
 
         private async Task ExecuteInstallation(InstallationJob job)
         {
+            // Clear pause flag and set status to InProgress when starting/resuming
+            job.IsPaused = false;
             job.Status = InstallationStatus.InProgress;
 
             try
@@ -241,7 +377,7 @@ namespace FastInstall
                     var userResponse = await Task.Run(() =>
                     {
                         var dialogResult = MessageBoxResult.No;
-                        playniteApi.MainView.UIDispatcher.Invoke(() =>
+                        playniteAPI.MainView.UIDispatcher.Invoke(() =>
                         {
                             dialogResult = MessageBox.Show(
                                 $"Spazio su disco insufficiente!\n\n" +
@@ -260,13 +396,13 @@ namespace FastInstall
                     if (userResponse == MessageBoxResult.No)
                     {
                         job.Status = InstallationStatus.Cancelled;
-                        playniteApi.MainView.UIDispatcher.Invoke(() =>
+                        playniteAPI.MainView.UIDispatcher.Invoke(() =>
                         {
                             job.ProgressWindow?.ShowError("Installazione annullata: spazio su disco insufficiente");
                             job.ProgressWindow?.AllowClose();
                         });
 
-                        playniteApi.Notifications.Add(new NotificationMessage(
+                        playniteAPI.Notifications.Add(new NotificationMessage(
                             $"FastInstall_InsufficientSpace_{job.Game.Id}",
                             $"Installazione di '{job.Game.Name}' annullata: spazio su disco insufficiente",
                             NotificationType.Error));
@@ -299,7 +435,7 @@ namespace FastInstall
                     (progress) =>
                     {
                         // Update UI on dispatcher thread
-                        playniteApi.MainView.UIDispatcher.Invoke(() =>
+                        playniteAPI.MainView.UIDispatcher.Invoke(() =>
                         {
                             job.ProgressWindow?.UpdateProgress(progress);
                         });
@@ -308,41 +444,66 @@ namespace FastInstall
 
                 if (job.CancellationTokenSource.Token.IsCancellationRequested)
                 {
-                    job.Status = InstallationStatus.Cancelled;
-                    
-                    // Only cleanup if we actually started copying (destination might exist)
-                    bool needsCleanup = Directory.Exists(job.DestinationPath);
-                    if (needsCleanup)
+                    // Check if this is a pause or a cancellation
+                    if (job.IsPaused)
                     {
-                        CleanupPartialCopy(job.DestinationPath);
-                    }
-                    
-                    playniteApi.MainView.UIDispatcher.Invoke(() =>
-                    {
-                        job.ProgressWindow?.ShowCancelled(showCleaningUp: needsCleanup);
-                        job.ProgressWindow?.AllowClose();
-                    });
-
-                    logger.Info($"FastInstall: Installation of '{job.Game.Name}' was cancelled");
-
-                    // Close the progress window automatically after a short delay (2 seconds)
-                    _ = Task.Delay(2000).ContinueWith(_ =>
-                    {
-                        playniteApi.MainView.UIDispatcher.Invoke(() =>
+                        // This is a pause, not a cancellation
+                        job.Status = InstallationStatus.Paused;
+                        
+                        playniteAPI.MainView.UIDispatcher.Invoke(() =>
                         {
-                            job.ProgressWindow?.Close();
+                            if (job.ProgressWindow != null)
+                            {
+                                job.ProgressWindow.StatusText.Text = "Installation paused";
+                                job.ProgressWindow.StatusText.Foreground = System.Windows.Media.Brushes.Yellow;
+                            }
                         });
-                    });
 
-                    // Notify controller that installation was cancelled
-                    job.OnCancelled?.Invoke();
+                        logger.Info($"FastInstall: Installation of '{job.Game.Name}' was paused");
+                        
+                        // Don't cleanup files, don't close window, don't notify cancellation
+                        // Just return and wait for resume
+                        return;
+                    }
+                    else
+                    {
+                        // This is a real cancellation
+                        job.Status = InstallationStatus.Cancelled;
+                        
+                        // Only cleanup if we actually started copying (destination might exist)
+                        bool needsCleanup = Directory.Exists(job.DestinationPath);
+                        if (needsCleanup)
+                        {
+                            CleanupPartialCopy(job.DestinationPath);
+                        }
+                        
+                        playniteAPI.MainView.UIDispatcher.Invoke(() =>
+                        {
+                            job.ProgressWindow?.ShowCancelled(showCleaningUp: needsCleanup);
+                            job.ProgressWindow?.AllowClose();
+                        });
+
+                        logger.Info($"FastInstall: Installation of '{job.Game.Name}' was cancelled");
+
+                        // Close the progress window automatically after a short delay (2 seconds)
+                        _ = Task.Delay(2000).ContinueWith(_ =>
+                        {
+                            playniteAPI.MainView.UIDispatcher.Invoke(() =>
+                            {
+                                job.ProgressWindow?.Close();
+                            });
+                        });
+
+                        // Notify controller that installation was cancelled
+                        job.OnCancelled?.Invoke();
+                    }
                 }
                 else if (result)
                 {
                     // Perform integrity check after copy
                     logger.Info($"FastInstall: Starting integrity check for '{job.Game.Name}'...");
                     
-                    playniteApi.MainView.UIDispatcher.Invoke(() =>
+                    playniteAPI.MainView.UIDispatcher.Invoke(() =>
                     {
                         if (job.ProgressWindow != null)
                         {
@@ -357,7 +518,7 @@ namespace FastInstall
                             job.DestinationPath,
                             (message) =>
                             {
-                                playniteApi.MainView.UIDispatcher.Invoke(() =>
+                                playniteAPI.MainView.UIDispatcher.Invoke(() =>
                                 {
                                     if (job.ProgressWindow != null)
                                     {
@@ -394,13 +555,13 @@ namespace FastInstall
                         logger.Error($"FastInstall: Integrity check failed for '{job.Game.Name}'. Missing: {integrityResult.MissingFiles}, Mismatched: {integrityResult.MismatchedFiles}");
 
                         // Show error notification
-                        playniteApi.Notifications.Add(new NotificationMessage(
+                        playniteAPI.Notifications.Add(new NotificationMessage(
                             $"FastInstall_IntegrityError_{job.Game.Id}",
                             $"Verifica integrità fallita per '{job.Game.Name}'. Alcuni file potrebbero essere corrotti.",
                             NotificationType.Error));
 
                         // Show error in progress window
-                        playniteApi.MainView.UIDispatcher.Invoke(() =>
+                        playniteAPI.MainView.UIDispatcher.Invoke(() =>
                         {
                             job.ProgressWindow?.ShowError($"Verifica integrità fallita: {integrityResult.MissingFiles} file mancanti, {integrityResult.MismatchedFiles} file con problemi");
                         });
@@ -413,7 +574,7 @@ namespace FastInstall
                     job.Status = InstallationStatus.Completed;
                     
                     // Update UI
-                    playniteApi.MainView.UIDispatcher.Invoke(() =>
+                    playniteAPI.MainView.UIDispatcher.Invoke(() =>
                     {
                         if (integrityResult.IsValid)
                         {
@@ -432,7 +593,7 @@ namespace FastInstall
                         ? $"Installazione del gioco {job.Game.Name} completata"
                         : $"Installazione del gioco {job.Game.Name} completata con errori di integrità";
 
-                    playniteApi.Notifications.Add(new NotificationMessage(
+                    playniteAPI.Notifications.Add(new NotificationMessage(
                         $"FastInstall_Complete_{job.Game.Id}",
                         notificationMessage,
                         integrityResult.IsValid ? NotificationType.Info : NotificationType.Error));
@@ -442,7 +603,7 @@ namespace FastInstall
                     // Close the progress window automatically after a short delay (2 seconds)
                     _ = Task.Delay(2000).ContinueWith(_ =>
                     {
-                        playniteApi.MainView.UIDispatcher.Invoke(() =>
+                        playniteAPI.MainView.UIDispatcher.Invoke(() =>
                         {
                             job.ProgressWindow?.Close();
                         });
@@ -451,34 +612,62 @@ namespace FastInstall
             }
             catch (OperationCanceledException)
             {
-                job.Status = InstallationStatus.Cancelled;
-                
-                // Only cleanup if destination exists (copy might have started)
-                bool needsCleanup = Directory.Exists(job.DestinationPath);
-                if (needsCleanup)
+                // Check if this is a pause or a cancellation
+                if (job.IsPaused)
                 {
-                    CleanupPartialCopy(job.DestinationPath);
-                }
-                
-                playniteApi.MainView.UIDispatcher.Invoke(() =>
-                {
-                    job.ProgressWindow?.ShowCancelled(showCleaningUp: needsCleanup);
-                    job.ProgressWindow?.AllowClose();
-                });
-
-                logger.Info($"FastInstall: Installation of '{job.Game.Name}' was cancelled");
-
-                // Close the progress window automatically after a short delay (2 seconds)
-                _ = Task.Delay(2000).ContinueWith(_ =>
-                {
-                    playniteApi.MainView.UIDispatcher.Invoke(() =>
+                    // This is a pause, not a cancellation
+                    job.Status = InstallationStatus.Paused;
+                    
+                    playniteAPI.MainView.UIDispatcher.Invoke(() =>
                     {
-                        job.ProgressWindow?.Close();
+                        if (job.ProgressWindow != null)
+                        {
+                            job.ProgressWindow.StatusText.Text = "Installation paused";
+                            job.ProgressWindow.StatusText.Foreground = System.Windows.Media.Brushes.Yellow;
+                            job.ProgressWindow.UpdatePauseState(true);
+                        }
                     });
-                });
 
-                // Notify controller that installation was cancelled
-                job.OnCancelled?.Invoke();
+                    logger.Info($"FastInstall: Installation of '{job.Game.Name}' was paused");
+                    
+                    // Don't cleanup files, don't close window, don't notify cancellation
+                    // Don't remove from active installations - keep it so it can be resumed
+                    // Just return and wait for resume
+                    return;
+                }
+                else
+                {
+                    // This is a real cancellation
+                    job.Status = InstallationStatus.Cancelled;
+                    job.IsPaused = false; // Clear pause flag on cancellation
+                    
+                    // Only cleanup if destination exists (copy might have started)
+                    bool needsCleanup = Directory.Exists(job.DestinationPath);
+                    if (needsCleanup)
+                    {
+                        CleanupPartialCopy(job.DestinationPath);
+                    }
+                    
+                    playniteAPI.MainView.UIDispatcher.Invoke(() =>
+                    {
+                        job.ProgressWindow?.ShowCancelled(showCleaningUp: needsCleanup);
+                        job.ProgressWindow?.AllowClose();
+                    });
+
+                    logger.Info($"FastInstall: Installation of '{job.Game.Name}' was cancelled");
+
+                    // Close the progress window automatically after a short delay (2 seconds)
+                    _ = Task.Delay(2000).ContinueWith(_ =>
+                    {
+                        playniteAPI.MainView.UIDispatcher.Invoke(() =>
+                        {
+                            job.ProgressWindow?.Close();
+                        });
+                    });
+
+                    // Notify controller that installation was cancelled
+                    job.OnCancelled?.Invoke();
+                }
             }
             catch (Exception ex)
             {
@@ -487,14 +676,14 @@ namespace FastInstall
                 
                 var errorMessage = GetFriendlyErrorMessage(ex);
                 
-                playniteApi.MainView.UIDispatcher.Invoke(() =>
+                playniteAPI.MainView.UIDispatcher.Invoke(() =>
                 {
                     job.ProgressWindow?.ShowError(errorMessage);
                     job.ProgressWindow?.AllowClose();
                 });
 
                 // Show notification
-                playniteApi.Notifications.Add(new NotificationMessage(
+                playniteAPI.Notifications.Add(new NotificationMessage(
                     $"FastInstall_Error_{job.Game.Id}",
                     $"Failed to install '{job.Game.Name}': {errorMessage}",
                     NotificationType.Error));
@@ -504,7 +693,11 @@ namespace FastInstall
             finally
             {
                 // Installation job finished (completed / cancelled / failed) -> remove from active installations
-                activeInstallations.TryRemove(job.Game.Id, out _);
+                // BUT: Don't remove if it's paused - we need to keep it for resume
+                if (job.Status != InstallationStatus.Paused && !job.IsPaused)
+                {
+                    activeInstallations.TryRemove(job.Game.Id, out _);
+                }
             }
         }
 
@@ -515,6 +708,8 @@ namespace FastInstall
         {
             if (activeInstallations.TryGetValue(gameId, out var job))
             {
+                // Clear pause flag on cancellation
+                job.IsPaused = false;
                 job.CancellationTokenSource?.Cancel();
                 
                 // If job is still pending (in queue), handle it immediately
@@ -524,7 +719,7 @@ namespace FastInstall
                     activeInstallations.TryRemove(gameId, out _);
                     
                     // Update UI immediately
-                    playniteApi.MainView.UIDispatcher.Invoke(() =>
+                    playniteAPI.MainView.UIDispatcher.Invoke(() =>
                     {
                         if (job.ProgressWindow != null)
                         {
@@ -542,7 +737,40 @@ namespace FastInstall
                     // Close window after delay
                     _ = Task.Delay(2000).ContinueWith(_ =>
                     {
-                        playniteApi.MainView.UIDispatcher.Invoke(() =>
+                        playniteAPI.MainView.UIDispatcher.Invoke(() =>
+                        {
+                            job.ProgressWindow?.Close();
+                        });
+                    });
+                }
+                else if (job.Status == InstallationStatus.Paused)
+                {
+                    // If paused, treat as cancellation and cleanup
+                    job.Status = InstallationStatus.Cancelled;
+                    activeInstallations.TryRemove(gameId, out _);
+                    
+                    // Cleanup partial files
+                    bool needsCleanup = Directory.Exists(job.DestinationPath);
+                    if (needsCleanup)
+                    {
+                        CleanupPartialCopy(job.DestinationPath);
+                    }
+                    
+                    playniteAPI.MainView.UIDispatcher.Invoke(() =>
+                    {
+                        if (job.ProgressWindow != null)
+                        {
+                            job.ProgressWindow.ShowCancelled(showCleaningUp: needsCleanup);
+                            job.ProgressWindow.AllowClose();
+                        }
+                    });
+                    
+                    job.OnCancelled?.Invoke();
+                    
+                    // Close window after delay
+                    _ = Task.Delay(2000).ContinueWith(_ =>
+                    {
+                        playniteAPI.MainView.UIDispatcher.Invoke(() =>
                         {
                             job.ProgressWindow?.Close();
                         });
@@ -550,6 +778,76 @@ namespace FastInstall
                 }
                 
                 logger.Info($"FastInstall: Cancellation requested for '{job.Game.Name}' (Status: {job.Status})");
+            }
+        }
+
+        /// <summary>
+        /// Pauses an ongoing installation
+        /// </summary>
+        public void PauseInstallation(Guid gameId)
+        {
+            if (activeInstallations.TryGetValue(gameId, out var job))
+            {
+                if (job.Status == InstallationStatus.InProgress)
+                {
+                    // Set pause flag BEFORE cancelling token
+                    job.IsPaused = true;
+                    job.Status = InstallationStatus.Paused;
+                    job.CancellationTokenSource?.Cancel(); // This will stop the copy operation
+                    
+                    playniteAPI.MainView.UIDispatcher.Invoke(() =>
+                    {
+                        if (job.ProgressWindow != null)
+                        {
+                            job.ProgressWindow.StatusText.Text = "Installation paused";
+                            job.ProgressWindow.StatusText.Foreground = System.Windows.Media.Brushes.Yellow;
+                            job.ProgressWindow.UpdatePauseState(true);
+                        }
+                    });
+                    
+                    logger.Info($"FastInstall: Installation paused for '{job.Game.Name}' - files preserved for resume");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Resumes a paused installation
+        /// </summary>
+        public void ResumeInstallation(Guid gameId)
+        {
+            if (activeInstallations.TryGetValue(gameId, out var job))
+            {
+                if (job.Status == InstallationStatus.Paused || job.IsPaused)
+                {
+                    // Clear pause flag and create new cancellation token
+                    job.IsPaused = false;
+                    job.Status = InstallationStatus.Pending;
+                    job.CancellationTokenSource = new CancellationTokenSource();
+                    
+                    playniteAPI.MainView.UIDispatcher.Invoke(() =>
+                    {
+                        if (job.ProgressWindow != null)
+                        {
+                            job.ProgressWindow.StatusText.Text = "Resuming installation...";
+                            job.ProgressWindow.StatusText.Foreground = System.Windows.Media.Brushes.White;
+                            job.ProgressWindow.UpdatePauseState(false);
+                        }
+                    });
+                    
+                    // Re-queue the job at the front of the queue (priority)
+                    installQueue.Enqueue(job);
+                    
+                    // Restart queue processing if needed
+                    lock (queueProcessorLock)
+                    {
+                        if (queueProcessorTask == null || queueProcessorTask.IsCompleted)
+                        {
+                            queueProcessorTask = Task.Run(ProcessQueue);
+                        }
+                    }
+                    
+                    logger.Info($"FastInstall: Installation resumed for '{job.Game.Name}' - will continue from existing files");
+                }
             }
         }
 
@@ -568,7 +866,7 @@ namespace FastInstall
                     logger.Info($"FastInstall: Starting cleanup of partial copy at '{destinationPath}'");
                     
                     // Show notification that cleanup is starting
-                    playniteApi.Notifications.Add(new NotificationMessage(
+                    playniteAPI.Notifications.Add(new NotificationMessage(
                         $"FastInstall_Cleanup_{destinationPath.GetHashCode()}",
                         "FastInstall: Cleaning up cancelled installation...",
                         NotificationType.Info));
@@ -581,7 +879,7 @@ namespace FastInstall
                 catch (Exception ex)
                 {
                     logger.Warn(ex, $"FastInstall: Could not clean up partial copy at '{destinationPath}'");
-                    playniteApi.Notifications.Add(new NotificationMessage(
+                    playniteAPI.Notifications.Add(new NotificationMessage(
                         $"FastInstall_CleanupError_{destinationPath.GetHashCode()}",
                         $"FastInstall: Could not clean up '{Path.GetFileName(destinationPath)}'. You may need to delete it manually.",
                         NotificationType.Error));
@@ -684,6 +982,17 @@ namespace FastInstall
         public int QueueCount => installQueue.Count;
 
         /// <summary>
+        /// Gets all active installation jobs (including queued and paused)
+        /// </summary>
+        public List<InstallationJob> GetAllJobs()
+        {
+            var allJobs = new List<InstallationJob>();
+            allJobs.AddRange(activeInstallations.Values);
+            allJobs.AddRange(installQueue);
+            return allJobs.Distinct().ToList(); // Remove duplicates
+        }
+
+        /// <summary>
         /// Gets information about the installation queue
         /// </summary>
         public QueueInfo GetQueueInfo()
@@ -691,13 +1000,21 @@ namespace FastInstall
             return new QueueInfo
             {
                 TotalActive = activeInstallations.Count,
-                Queued = installQueue.Count,
+                Queued = installQueue.Count(j => j.Status != InstallationStatus.Paused),
+                Paused = activeInstallations.Values.Count(j => j.Status == InstallationStatus.Paused) + 
+                         installQueue.Count(j => j.Status == InstallationStatus.Paused),
                 CurrentlyInstalling = activeInstallations.Values
                     .Where(j => j.Status == InstallationStatus.InProgress)
                     .Select(j => j.Game.Name)
-                    .FirstOrDefault(),
+                    .ToList(),
                 QueuedGames = installQueue
+                    .Where(j => j.Status != InstallationStatus.Paused)
                     .Select(j => j.Game.Name)
+                    .ToList(),
+                PausedGames = activeInstallations.Values
+                    .Where(j => j.Status == InstallationStatus.Paused)
+                    .Select(j => j.Game.Name)
+                    .Concat(installQueue.Where(j => j.Status == InstallationStatus.Paused).Select(j => j.Game.Name))
                     .ToList()
             };
         }
@@ -710,7 +1027,9 @@ namespace FastInstall
     {
         public int TotalActive { get; set; }
         public int Queued { get; set; }
-        public string CurrentlyInstalling { get; set; }
+        public int Paused { get; set; }
+        public List<string> CurrentlyInstalling { get; set; } = new List<string>();
         public List<string> QueuedGames { get; set; } = new List<string>();
+        public List<string> PausedGames { get; set; } = new List<string>();
     }
 }

@@ -12,17 +12,33 @@ namespace FastInstall
     {
         private readonly CancellationTokenSource cancellationTokenSource;
         private readonly Action onCancelRequested;
+        private readonly Action onPauseRequested;
+        private readonly Action onResumeRequested;
         private bool isCompleted = false;
+        private bool isPaused = false;
 
-        public InstallationProgressWindow(string gameName, CancellationTokenSource cts, Action onCancel = null, bool startQueued = false)
+
+        public InstallationProgressWindow(string gameName, CancellationTokenSource cts, Action onCancel = null, Action onPause = null, Action onResume = null, bool startQueued = false)
         {
             InitializeComponent();
             
             cancellationTokenSource = cts;
             onCancelRequested = onCancel;
+            onPauseRequested = onPause;
+            onResumeRequested = onResume;
             
             GameNameText.Text = gameName;
             StatusText.Text = startQueued ? "Queued for installation..." : "Preparing to copy files...";
+            
+            // Show/hide pause button based on availability
+            if (onPauseRequested != null && onResumeRequested != null)
+            {
+                PauseButton.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                PauseButton.Visibility = Visibility.Collapsed;
+            }
             
             // Handle window closing
             Closing += OnWindowClosing;
@@ -109,6 +125,51 @@ namespace FastInstall
         private void MinimizeButton_Click(object sender, RoutedEventArgs e)
         {
             WindowState = WindowState.Minimized;
+        }
+
+        private void PauseButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (isCompleted)
+                return;
+            
+            if (!isPaused)
+            {
+                // Pause
+                isPaused = true;
+                PauseButton.Content = "Resume";
+                PauseButton.Background = System.Windows.Media.Brushes.Green;
+                StatusText.Text = "Pausing installation...";
+                StatusText.Foreground = System.Windows.Media.Brushes.Yellow;
+                onPauseRequested?.Invoke();
+            }
+            else
+            {
+                // Resume
+                isPaused = false;
+                PauseButton.Content = "Pause";
+                PauseButton.Background = System.Windows.Media.Brushes.Orange;
+                StatusText.Text = "Resuming installation...";
+                StatusText.Foreground = System.Windows.Media.Brushes.White;
+                onResumeRequested?.Invoke();
+            }
+        }
+
+        /// <summary>
+        /// Updates the pause button state when installation is paused externally
+        /// </summary>
+        public void UpdatePauseState(bool paused)
+        {
+            isPaused = paused;
+            if (paused)
+            {
+                PauseButton.Content = "Resume";
+                PauseButton.Background = System.Windows.Media.Brushes.Green;
+            }
+            else
+            {
+                PauseButton.Content = "Pause";
+                PauseButton.Background = System.Windows.Media.Brushes.Orange;
+            }
         }
 
         private void CancelButton_Click(object sender, RoutedEventArgs e)

@@ -116,8 +116,43 @@ namespace FastInstall
                     // Create destination directory
                     Directory.CreateDirectory(destinationPath);
 
+                    // Check existing files to support resume
+                    long existingBytes = 0;
+                    int existingFiles = 0;
+                    foreach (var sourceFile in allFiles)
+                    {
+                        var relativePath = sourceFile.Substring(sourcePath.Length).TrimStart(Path.DirectorySeparatorChar);
+                        var destFile = Path.Combine(destinationPath, relativePath);
+                        
+                        if (File.Exists(destFile))
+                        {
+                            try
+                            {
+                                var sourceInfo = new FileInfo(sourceFile);
+                                var destInfo = new FileInfo(destFile);
+                                
+                                // If file exists and has same size, consider it already copied
+                                if (sourceInfo.Length == destInfo.Length)
+                                {
+                                    existingBytes += sourceInfo.Length;
+                                    existingFiles++;
+                                }
+                            }
+                            catch
+                            {
+                                // If we can't check, assume file needs to be copied
+                            }
+                        }
+                    }
+                    
+                    // Initialize progress with existing files
+                    progressInfo.CopiedBytes = existingBytes;
+                    progressInfo.FilesCopied = existingFiles;
+                    
+                    logger.Info($"FastInstall: Resuming copy - {existingFiles} files already copied ({FormatBytes(existingBytes)})");
+
                     // Copy files with progress tracking
-                    long lastUpdateBytes = 0;
+                    long lastUpdateBytes = existingBytes;
                     DateTime lastUpdateTime = DateTime.Now;
                     const int updateIntervalMs = 250; // Update every 250ms
 
@@ -141,38 +176,84 @@ namespace FastInstall
                         var fileInfo = new FileInfo(sourceFile);
                         progressInfo.CurrentFile = relativePath;
 
-                        // Copy file with buffer for large files
-                        CopyFileWithProgress(sourceFile, destFile, fileInfo.Length, (bytesCopied) =>
+                        // Skip file if it already exists and has correct size (resume support)
+                        bool skipFile = false;
+                        if (File.Exists(destFile))
                         {
-                            progressInfo.CopiedBytes += bytesCopied;
-                            progressInfo.Elapsed = stopwatch.Elapsed;
-
-                            // Calculate speed (use moving average)
-                            var timeSinceLastUpdate = (DateTime.Now - lastUpdateTime).TotalMilliseconds;
-                            if (timeSinceLastUpdate >= updateIntervalMs)
+                            try
                             {
-                                var bytesSinceLastUpdate = progressInfo.CopiedBytes - lastUpdateBytes;
-                                progressInfo.SpeedBytesPerSecond = bytesSinceLastUpdate / (timeSinceLastUpdate / 1000.0);
-
-                                // Calculate ETA
-                                if (progressInfo.SpeedBytesPerSecond > 0)
+                                var destInfo = new FileInfo(destFile);
+                                if (fileInfo.Length == destInfo.Length)
                                 {
-                                    var remainingBytes = progressInfo.TotalBytes - progressInfo.CopiedBytes;
-                                    var remainingSeconds = remainingBytes / progressInfo.SpeedBytesPerSecond;
-                                    progressInfo.EstimatedRemaining = TimeSpan.FromSeconds(remainingSeconds);
+                                    skipFile = true;
+                                    // Update progress as if file was copied
+                                    progressInfo.CopiedBytes += fileInfo.Length;
+                                    progressInfo.FilesCopied++;
+                                    
+                                    // Update progress display
+                                    var timeSinceLastUpdate = (DateTime.Now - lastUpdateTime).TotalMilliseconds;
+                                    if (timeSinceLastUpdate >= updateIntervalMs)
+                                    {
+                                        var bytesSinceLastUpdate = progressInfo.CopiedBytes - lastUpdateBytes;
+                                        progressInfo.SpeedBytesPerSecond = bytesSinceLastUpdate / (timeSinceLastUpdate / 1000.0);
+
+                                        if (progressInfo.SpeedBytesPerSecond > 0)
+                                        {
+                                            var remainingBytes = progressInfo.TotalBytes - progressInfo.CopiedBytes;
+                                            var remainingSeconds = remainingBytes / progressInfo.SpeedBytesPerSecond;
+                                            progressInfo.EstimatedRemaining = TimeSpan.FromSeconds(remainingSeconds);
+                                        }
+
+                                        progressInfo.PercentComplete = (int)((progressInfo.CopiedBytes * 100) / progressInfo.TotalBytes);
+
+                                        lastUpdateBytes = progressInfo.CopiedBytes;
+                                        lastUpdateTime = DateTime.Now;
+
+                                        progressCallback?.Invoke(progressInfo);
+                                    }
                                 }
-
-                                progressInfo.PercentComplete = (int)((progressInfo.CopiedBytes * 100) / progressInfo.TotalBytes);
-
-                                lastUpdateBytes = progressInfo.CopiedBytes;
-                                lastUpdateTime = DateTime.Now;
-
-                                // Report progress
-                                progressCallback?.Invoke(progressInfo);
                             }
-                        }, cancellationToken);
+                            catch
+                            {
+                                // If we can't check, copy the file
+                            }
+                        }
 
-                        progressInfo.FilesCopied++;
+                        if (!skipFile)
+                        {
+                            // Copy file with buffer for large files
+                            CopyFileWithProgress(sourceFile, destFile, fileInfo.Length, (bytesCopied) =>
+                            {
+                                progressInfo.CopiedBytes += bytesCopied;
+                                progressInfo.Elapsed = stopwatch.Elapsed;
+
+                                // Calculate speed (use moving average)
+                                var timeSinceLastUpdate = (DateTime.Now - lastUpdateTime).TotalMilliseconds;
+                                if (timeSinceLastUpdate >= updateIntervalMs)
+                                {
+                                    var bytesSinceLastUpdate = progressInfo.CopiedBytes - lastUpdateBytes;
+                                    progressInfo.SpeedBytesPerSecond = bytesSinceLastUpdate / (timeSinceLastUpdate / 1000.0);
+
+                                    // Calculate ETA
+                                    if (progressInfo.SpeedBytesPerSecond > 0)
+                                    {
+                                        var remainingBytes = progressInfo.TotalBytes - progressInfo.CopiedBytes;
+                                        var remainingSeconds = remainingBytes / progressInfo.SpeedBytesPerSecond;
+                                        progressInfo.EstimatedRemaining = TimeSpan.FromSeconds(remainingSeconds);
+                                    }
+
+                                    progressInfo.PercentComplete = (int)((progressInfo.CopiedBytes * 100) / progressInfo.TotalBytes);
+
+                                    lastUpdateBytes = progressInfo.CopiedBytes;
+                                    lastUpdateTime = DateTime.Now;
+
+                                    // Report progress
+                                    progressCallback?.Invoke(progressInfo);
+                                }
+                            }, cancellationToken);
+
+                            progressInfo.FilesCopied++;
+                        }
                     }
 
                     // Copy empty directories
@@ -224,6 +305,25 @@ namespace FastInstall
             CancellationToken cancellationToken)
         {
             const int bufferSize = 1024 * 1024; // 1 MB buffer for better performance
+
+            // Check if file already exists and has correct size (resume support)
+            if (File.Exists(destFile))
+            {
+                try
+                {
+                    var existingInfo = new FileInfo(destFile);
+                    if (existingInfo.Length == fileSize)
+                    {
+                        // File already exists and has correct size - skip copy
+                        bytesWrittenCallback?.Invoke(fileSize);
+                        return;
+                    }
+                }
+                catch
+                {
+                    // If we can't check, proceed with copy
+                }
+            }
 
             using (var sourceStream = new FileStream(sourceFile, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize))
             using (var destStream = new FileStream(destFile, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize))

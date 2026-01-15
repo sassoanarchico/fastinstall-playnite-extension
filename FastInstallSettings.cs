@@ -189,6 +189,8 @@ namespace FastInstall
     public class FastInstallSettings : ObservableObject
     {
         private ObservableCollection<FolderConfiguration> folderConfigurations = new ObservableCollection<FolderConfiguration>();
+        private bool enableParallelDownloads = false;
+        private int maxParallelDownloads = 2;
 
         // Legacy settings - kept for backward compatibility
         private string sourceArchiveDirectory = string.Empty;
@@ -199,6 +201,47 @@ namespace FastInstall
         {
             get => folderConfigurations;
             set => SetValue(ref folderConfigurations, value);
+        }
+
+        /// <summary>
+        /// Enable parallel downloads (if false, downloads are sequential)
+        /// </summary>
+        public bool EnableParallelDownloads
+        {
+            get => enableParallelDownloads;
+            set
+            {
+                SetValue(ref enableParallelDownloads, value);
+                // When disabled, ensure maxParallelDownloads is effectively 1
+                if (!value)
+                {
+                    OnPropertyChanged(nameof(EffectiveMaxParallelDownloads));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Maximum number of parallel downloads (only used when EnableParallelDownloads is true)
+        /// </summary>
+        public int MaxParallelDownloads
+        {
+            get => maxParallelDownloads;
+            set
+            {
+                if (value < 1) value = 1;
+                if (value > 10) value = 10; // Reasonable limit
+                SetValue(ref maxParallelDownloads, value);
+                OnPropertyChanged(nameof(EffectiveMaxParallelDownloads));
+            }
+        }
+
+        /// <summary>
+        /// Effective maximum parallel downloads (1 if disabled, MaxParallelDownloads if enabled)
+        /// </summary>
+        [DontSerialize]
+        public int EffectiveMaxParallelDownloads
+        {
+            get => enableParallelDownloads ? maxParallelDownloads : 1;
         }
 
         // Legacy properties - kept for backward compatibility
@@ -519,6 +562,9 @@ namespace FastInstall
 
             // Refresh emulators list in case user added/removed emulators
             LoadAvailableEmulators();
+            
+            // Apply max parallel downloads setting
+            BackgroundInstallManager.Instance?.SetMaxParallelInstalls(Settings.EffectiveMaxParallelDownloads);
         }
 
         public void CancelEdit()
@@ -539,6 +585,9 @@ namespace FastInstall
                     Settings.FolderConfigurations.Add(config);
                 }
             }
+
+            // Apply max parallel downloads setting
+            BackgroundInstallManager.Instance?.SetMaxParallelInstalls(Settings.EffectiveMaxParallelDownloads);
 
             // Save settings
             plugin.SavePluginSettings(Settings);

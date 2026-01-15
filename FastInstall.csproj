@@ -60,6 +60,9 @@
     <Compile Include="InstallationProgressWindow.xaml.cs">
       <DependentUpon>InstallationProgressWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="DownloadManagerWindow.xaml.cs">
+      <DependentUpon>DownloadManagerWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -68,6 +71,10 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="InstallationProgressWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="DownloadManagerWindow.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
