@@ -181,44 +181,6 @@ namespace FastInstall
                         // Check if game is already installed on SSD
                         bool isInstalled = false;
                         string installDir = null;
-                        bool isInQueue = false;
-                        bool isDownloading = false;
-
-                        // Check if game is in installation queue
-                        // Note: We can't easily match by GameId here since jobs use Playnite Game objects
-                        // So we'll check by name matching
-                        var installManager = BackgroundInstallManager.Instance;
-                        if (installManager != null)
-                        {
-                            try
-                            {
-                                var allJobs = installManager.GetAllJobs();
-                                var job = allJobs.FirstOrDefault(j => 
-                                {
-                                    try
-                                    {
-                                        var jobGame = PlayniteApi.Database.Games.Get(j.Game.Id);
-                                        return jobGame != null && 
-                                            (jobGame.Name.Replace(" [In Queue]", "").Replace(" [Downloading...]", "") == detectedGame.Name ||
-                                             j.Game.Name.Replace(" [In Queue]", "").Replace(" [Downloading...]", "") == detectedGame.Name);
-                                    }
-                                    catch { return false; }
-                                });
-                                
-                                if (job != null)
-                                {
-                                    if (job.Status == InstallationStatus.Pending)
-                                    {
-                                        isInQueue = true;
-                                    }
-                                    else if (job.Status == InstallationStatus.InProgress)
-                                    {
-                                        isDownloading = true;
-                                    }
-                                }
-                            }
-                            catch { }
-                        }
 
                         if (!string.IsNullOrWhiteSpace(config.DestinationPath))
                         {
@@ -237,21 +199,10 @@ namespace FastInstall
                             platformName = config.Platform;
                         }
 
-                        // Add status suffix to name if in queue or downloading
-                        string displayName = detectedGame.Name;
-                        if (isDownloading)
-                        {
-                            displayName = $"{detectedGame.Name} [Downloading...]";
-                        }
-                        else if (isInQueue)
-                        {
-                            displayName = $"{detectedGame.Name} [In Queue]";
-                        }
-
                         var game = new GameMetadata
                         {
                             GameId = gameId,
-                            Name = displayName,
+                            Name = detectedGame.Name,
                             IsInstalled = isInstalled,
                             InstallDirectory = installDir,
                             Source = new MetadataNameProperty("FastInstall Archive"),

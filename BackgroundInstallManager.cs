@@ -380,24 +380,8 @@ namespace FastInstall
             // Remove from active installations immediately
             activeInstallations.TryRemove(job.Game.Id, out _);
             
-            // Restore original game name
             playniteAPI.MainView.UIDispatcher.Invoke(() =>
             {
-                try
-                {
-                    var dbGame = playniteAPI.Database.Games.Get(job.Game.Id);
-                    if (dbGame != null)
-                    {
-                        var originalName = dbGame.Name.Replace(" [In Queue]", "").Replace(" [Downloading...]", "");
-                        if (dbGame.Name != originalName)
-                        {
-                            dbGame.Name = originalName;
-                            playniteAPI.Database.Games.Update(dbGame);
-                        }
-                    }
-                }
-                catch { }
-                
                 if (job.ProgressWindow != null)
                 {
                     job.ProgressWindow.StatusText.Text = "Installation cancelled";
@@ -428,22 +412,6 @@ namespace FastInstall
             // Clear pause flag and set status to InProgress when starting/resuming
             job.IsPaused = false;
             job.Status = InstallationStatus.InProgress;
-
-            // Update game name in Playnite to show "Downloading" status
-            playniteAPI.MainView.UIDispatcher.Invoke(() =>
-            {
-                try
-                {
-                    var dbGame = playniteAPI.Database.Games.Get(job.Game.Id);
-                    if (dbGame != null && !dbGame.Name.Contains("[Downloading...]"))
-                    {
-                        var originalName = dbGame.Name.Replace(" [In Queue]", "").Replace(" [Downloading...]", "");
-                        dbGame.Name = $"{originalName} [Downloading...]";
-                        playniteAPI.Database.Games.Update(dbGame);
-                    }
-                }
-                catch { }
-            });
 
             try
             {
@@ -911,24 +879,8 @@ namespace FastInstall
                 
                 var errorMessage = GetFriendlyErrorMessage(ex);
                 
-                // Restore original game name
                 playniteAPI.MainView.UIDispatcher.Invoke(() =>
                 {
-                    try
-                    {
-                        var dbGame = playniteAPI.Database.Games.Get(job.Game.Id);
-                        if (dbGame != null)
-                        {
-                            var originalName = dbGame.Name.Replace(" [In Queue]", "").Replace(" [Downloading...]", "");
-                            if (dbGame.Name != originalName)
-                            {
-                                dbGame.Name = originalName;
-                                playniteAPI.Database.Games.Update(dbGame);
-                            }
-                        }
-                    }
-                    catch { }
-                    
                     job.ProgressWindow?.ShowError(errorMessage);
                     job.ProgressWindow?.AllowClose();
                 });
