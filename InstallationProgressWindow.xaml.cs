@@ -93,11 +93,13 @@ namespace FastInstall
         /// <summary>
         /// Shows the window as cancelled
         /// </summary>
-        public void ShowCancelled()
+        public void ShowCancelled(bool showCleaningUp = true)
         {
             isCompleted = true;
 
-            StatusText.Text = "Installation cancelled. Cleaning up...";
+            StatusText.Text = showCleaningUp 
+                ? "Installation cancelled. Cleaning up..." 
+                : "Installation cancelled";
             StatusText.Foreground = System.Windows.Media.Brushes.Orange;
             
             CancelButton.Content = "Close";

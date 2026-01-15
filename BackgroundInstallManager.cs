@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -167,11 +168,35 @@ namespace FastInstall
                     if (job.CancellationTokenSource.IsCancellationRequested)
                     {
                         job.Status = InstallationStatus.Cancelled;
+                        
+                        // Remove from active installations immediately
+                        activeInstallations.TryRemove(job.Game.Id, out _);
+                        
+                        // Update UI - show cancelled but don't show "Cleaning up" since nothing was copied
                         playniteApi.MainView.UIDispatcher.Invoke(() =>
                         {
-                            job.ProgressWindow?.ShowCancelled();
-                            job.ProgressWindow?.AllowClose();
+                            if (job.ProgressWindow != null)
+                            {
+                                job.ProgressWindow.StatusText.Text = "Installation cancelled";
+                                job.ProgressWindow.StatusText.Foreground = System.Windows.Media.Brushes.Orange;
+                                job.ProgressWindow.CancelButton.Content = "Close";
+                                job.ProgressWindow.CancelButton.Background = System.Windows.Media.Brushes.Gray;
+                                job.ProgressWindow.AllowClose();
+                            }
                         });
+                        
+                        // Notify controller that installation was cancelled
+                        job.OnCancelled?.Invoke();
+                        
+                        // Close the progress window automatically after a short delay (2 seconds)
+                        _ = Task.Delay(2000).ContinueWith(_ =>
+                        {
+                            playniteApi.MainView.UIDispatcher.Invoke(() =>
+                            {
+                                job.ProgressWindow?.Close();
+                            });
+                        });
+                        
                         logger.Info($"FastInstall: Skipping queued job for '{job.Game.Name}' because it was cancelled before start.");
                         continue;
                     }
@@ -284,11 +309,17 @@ namespace FastInstall
                 if (job.CancellationTokenSource.Token.IsCancellationRequested)
                 {
                     job.Status = InstallationStatus.Cancelled;
-                    CleanupPartialCopy(job.DestinationPath);
+                    
+                    // Only cleanup if we actually started copying (destination might exist)
+                    bool needsCleanup = Directory.Exists(job.DestinationPath);
+                    if (needsCleanup)
+                    {
+                        CleanupPartialCopy(job.DestinationPath);
+                    }
                     
                     playniteApi.MainView.UIDispatcher.Invoke(() =>
                     {
-                        job.ProgressWindow?.ShowCancelled();
+                        job.ProgressWindow?.ShowCancelled(showCleaningUp: needsCleanup);
                         job.ProgressWindow?.AllowClose();
                     });
 
@@ -421,11 +452,17 @@ namespace FastInstall
             catch (OperationCanceledException)
             {
                 job.Status = InstallationStatus.Cancelled;
-                CleanupPartialCopy(job.DestinationPath);
+                
+                // Only cleanup if destination exists (copy might have started)
+                bool needsCleanup = Directory.Exists(job.DestinationPath);
+                if (needsCleanup)
+                {
+                    CleanupPartialCopy(job.DestinationPath);
+                }
                 
                 playniteApi.MainView.UIDispatcher.Invoke(() =>
                 {
-                    job.ProgressWindow?.ShowCancelled();
+                    job.ProgressWindow?.ShowCancelled(showCleaningUp: needsCleanup);
                     job.ProgressWindow?.AllowClose();
                 });
 
@@ -472,14 +509,47 @@ namespace FastInstall
         }
 
         /// <summary>
-        /// Cancels an ongoing installation
+        /// Cancels an ongoing installation or removes it from queue
         /// </summary>
         public void CancelInstallation(Guid gameId)
         {
             if (activeInstallations.TryGetValue(gameId, out var job))
             {
                 job.CancellationTokenSource?.Cancel();
-                logger.Info($"FastInstall: Cancellation requested for '{job.Game.Name}'");
+                
+                // If job is still pending (in queue), handle it immediately
+                if (job.Status == InstallationStatus.Pending)
+                {
+                    // Remove from active installations immediately
+                    activeInstallations.TryRemove(gameId, out _);
+                    
+                    // Update UI immediately
+                    playniteApi.MainView.UIDispatcher.Invoke(() =>
+                    {
+                        if (job.ProgressWindow != null)
+                        {
+                            job.ProgressWindow.StatusText.Text = "Installation cancelled";
+                            job.ProgressWindow.StatusText.Foreground = System.Windows.Media.Brushes.Orange;
+                            job.ProgressWindow.CancelButton.Content = "Close";
+                            job.ProgressWindow.CancelButton.Background = System.Windows.Media.Brushes.Gray;
+                            job.ProgressWindow.AllowClose();
+                        }
+                    });
+                    
+                    // Notify controller immediately
+                    job.OnCancelled?.Invoke();
+                    
+                    // Close window after delay
+                    _ = Task.Delay(2000).ContinueWith(_ =>
+                    {
+                        playniteApi.MainView.UIDispatcher.Invoke(() =>
+                        {
+                            job.ProgressWindow?.Close();
+                        });
+                    });
+                }
+                
+                logger.Info($"FastInstall: Cancellation requested for '{job.Game.Name}' (Status: {job.Status})");
             }
         }
 
@@ -604,8 +674,43 @@ namespace FastInstall
         }
 
         /// <summary>
-        /// Gets the number of active installations
+        /// Gets the number of active installations (including queued)
         /// </summary>
         public int ActiveCount => activeInstallations.Count;
+
+        /// <summary>
+        /// Gets the number of jobs in the queue (excluding the one currently being processed)
+        /// </summary>
+        public int QueueCount => installQueue.Count;
+
+        /// <summary>
+        /// Gets information about the installation queue
+        /// </summary>
+        public QueueInfo GetQueueInfo()
+        {
+            return new QueueInfo
+            {
+                TotalActive = activeInstallations.Count,
+                Queued = installQueue.Count,
+                CurrentlyInstalling = activeInstallations.Values
+                    .Where(j => j.Status == InstallationStatus.InProgress)
+                    .Select(j => j.Game.Name)
+                    .FirstOrDefault(),
+                QueuedGames = installQueue
+                    .Select(j => j.Game.Name)
+                    .ToList()
+            };
+        }
+    }
+
+    /// <summary>
+    /// Information about the installation queue
+    /// </summary>
+    public class QueueInfo
+    {
+        public int TotalActive { get; set; }
+        public int Queued { get; set; }
+        public string CurrentlyInstalling { get; set; }
+        public List<string> QueuedGames { get; set; } = new List<string>();
     }
 }
