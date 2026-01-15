@@ -46,7 +46,7 @@ namespace FastInstall
         private static readonly ILogger logger = LogManager.GetLogger();
         private FastInstallSettingsViewModel settingsViewModel;
 
-        public const string PluginVersion = "0.5.2";
+        public const string PluginVersion = "0.5.3";
         
         public override Guid Id { get; } = Guid.Parse("F8A1B2C3-D4E5-6789-ABCD-EF1234567890");
         public override string Name => "FastInstall";
@@ -167,10 +167,15 @@ namespace FastInstall
                     var directories = Directory.GetDirectories(config.SourcePath);
                     logger.Info($"FastInstall: Found {directories.Length} game folders in '{config.SourcePath}'.");
 
+                    // Normalize source path once for all games in this configuration
+                    var normalizedConfigSourcePath = Path.GetFullPath(config.SourcePath)
+                        .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                        .ToLowerInvariant();
+                    
                     foreach (var dir in directories)
                     {
                         var detectedGame = DetectGameInfo(dir);
-                        var gameId = GenerateGameId(config.SourcePath, detectedGame.Name);
+                        var gameId = GenerateGameId(normalizedConfigSourcePath, detectedGame.Name);
 
                         // Check if game is already installed on SSD
                         bool isInstalled = false;
@@ -629,9 +634,23 @@ namespace FastInstall
             }
 
             // Normalize path to ensure consistent hashing (handle trailing slashes, case, etc.)
-            var normalizedPath = Path.GetFullPath(sourcePath)
-                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            var sourceHash = normalizedPath.GetHashCode().ToString("X8");
+            // Note: sourcePath should already be normalized when passed, but we normalize again for safety
+            string normalizedPath;
+            if (Path.IsPathRooted(sourcePath))
+            {
+                normalizedPath = Path.GetFullPath(sourcePath)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                    .ToLowerInvariant(); // Normalize case for consistent hashing
+            }
+            else
+            {
+                normalizedPath = sourcePath
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                    .ToLowerInvariant();
+            }
+            
+            // Use stable hash algorithm instead of GetHashCode() which can vary between runs
+            var sourceHash = GetStableHash(normalizedPath).ToString("X8");
 
             // Normalize game name:
             // - lower case
@@ -649,6 +668,26 @@ namespace FastInstall
             var cleanName = name.Replace(" ", "_");
 
             return $"fastinstall_{sourceHash}_{cleanName}";
+        }
+
+        /// <summary>
+        /// Generates a stable hash code for a string that remains consistent across application runs
+        /// Uses a simple hash algorithm that produces the same result for the same input
+        /// </summary>
+        private int GetStableHash(string input)
+        {
+            if (string.IsNullOrEmpty(input))
+                return 0;
+
+            unchecked
+            {
+                int hash = 17;
+                foreach (char c in input)
+                {
+                    hash = hash * 31 + char.ToLowerInvariant(c);
+                }
+                return hash;
+            }
         }
 
         /// <summary>
@@ -721,7 +760,9 @@ namespace FastInstall
                     try
                     {
                         var dirs = Directory.GetDirectories(src);
-                        var normalizedSrc = Path.GetFullPath(src).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                        var normalizedSrc = Path.GetFullPath(src)
+                            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                            .ToLowerInvariant(); // Normalize case for consistent hashing
                         
                         foreach (var dir in dirs)
                         {
@@ -755,7 +796,9 @@ namespace FastInstall
                         var dirs = Directory.GetDirectories(dst);
                         // Use source path for GameId generation if available (GameId is based on source path), otherwise destination
                         var basePath = !string.IsNullOrWhiteSpace(src) ? src : dst;
-                        var normalizedBasePath = Path.GetFullPath(basePath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                        var normalizedBasePath = Path.GetFullPath(basePath)
+                            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                            .ToLowerInvariant(); // Normalize case for consistent hashing
                         
                         foreach (var dir in dirs)
                         {
@@ -809,7 +852,9 @@ namespace FastInstall
                 logger.Debug($"FastInstall: Scanning {directories.Length} folders to find match for GameId '{game.GameId}'");
                 
                 // Normalize source path for consistent GameId generation
-                var normalizedSourcePath = Path.GetFullPath(config.SourcePath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                var normalizedSourcePath = Path.GetFullPath(config.SourcePath)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                    .ToLowerInvariant(); // Normalize case for consistent hashing
                 
                 foreach (var dir in directories)
                 {
