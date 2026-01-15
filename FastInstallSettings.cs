@@ -1,7 +1,9 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Reflection;
 using Playnite.SDK;
 using Playnite.SDK.Data;
 using Playnite.SDK.Models;
@@ -19,6 +21,7 @@ namespace FastInstall
         private string platform = "PC";
         private Guid? emulatorId = null;
         private string emulatorProfileId = null;
+        private ObservableCollection<EmulatorProfileItem> cachedProfilesForEmulator = null;
 
         public bool IsEnabled
         {
@@ -53,7 +56,85 @@ namespace FastInstall
         public Guid? EmulatorId
         {
             get => emulatorId;
-            set => SetValue(ref emulatorId, value);
+            set
+            {
+                var oldValue = emulatorId;
+                SetValue(ref emulatorId, value);
+                
+                // When emulator changes, clear profile selection and update available profiles
+                if (oldValue != value)
+                {
+                    // Invalidate cached profiles
+                    cachedProfilesForEmulator = null;
+                    
+                    // Clear profile if emulator is deselected or changed
+                    if (!value.HasValue || value.Value == Guid.Empty)
+                    {
+                        EmulatorProfileId = null;
+                    }
+                    else if (emulatorProfileId != null)
+                    {
+                        // Check if current profile belongs to the new emulator
+                        UpdateCachedProfiles();
+                        var currentProfileExists = cachedProfilesForEmulator?.Any(p => p.ProfileId == emulatorProfileId) ?? false;
+                        if (!currentProfileExists)
+                        {
+                            EmulatorProfileId = null;
+                        }
+                    }
+                    
+                    OnPropertyChanged(nameof(AvailableProfilesForEmulator));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Reference to the ViewModel to access available profiles
+        /// This is set by the ViewModel when creating configurations
+        /// </summary>
+        [DontSerialize]
+        public FastInstallSettingsViewModel ViewModel { get; set; }
+
+        /// <summary>
+        /// Updates the cached profiles list for the current emulator
+        /// </summary>
+        private void UpdateCachedProfiles()
+        {
+            if (ViewModel == null || !EmulatorId.HasValue || EmulatorId.Value == Guid.Empty)
+            {
+                cachedProfilesForEmulator = new ObservableCollection<EmulatorProfileItem>();
+                return;
+            }
+
+            var allProfiles = ViewModel.AvailableProfiles;
+            cachedProfilesForEmulator = new ObservableCollection<EmulatorProfileItem>(
+                allProfiles.Where(p => p.EmulatorId == EmulatorId.Value)
+            );
+
+            // Add a "None" option at the beginning
+            cachedProfilesForEmulator.Insert(0, new EmulatorProfileItem
+            {
+                EmulatorId = EmulatorId.Value,
+                ProfileId = null,
+                DisplayName = "(Default / Auto)"
+            });
+        }
+
+        /// <summary>
+        /// Returns only the profiles for the currently selected emulator
+        /// Uses a cached collection that updates when EmulatorId changes
+        /// </summary>
+        [DontSerialize]
+        public ObservableCollection<EmulatorProfileItem> AvailableProfilesForEmulator
+        {
+            get
+            {
+                if (cachedProfilesForEmulator == null)
+                {
+                    UpdateCachedProfiles();
+                }
+                return cachedProfilesForEmulator ?? new ObservableCollection<EmulatorProfileItem>();
+            }
         }
 
         /// <summary>
@@ -245,8 +326,11 @@ namespace FastInstall
             "Microsoft Xbox 360"
         };
 
-        // Available emulators from Playnite
+        // Available emulators from Playnite (emulator dropdown)
         private ObservableCollection<EmulatorProfileItem> availableEmulators;
+
+        // Available emulator profiles from Playnite (profile dropdown)
+        private ObservableCollection<EmulatorProfileItem> availableProfiles;
 
         // Cached commands
         private RelayCommand<object> addConfigurationCommand;
@@ -298,6 +382,18 @@ namespace FastInstall
             }
         }
 
+        public ObservableCollection<EmulatorProfileItem> AvailableProfiles
+        {
+            get
+            {
+                if (availableProfiles == null)
+                {
+                    LoadAvailableEmulators();
+                }
+                return availableProfiles;
+            }
+        }
+
         public FastInstallSettingsViewModel(FastInstallPlugin plugin)
         {
             this.plugin = plugin;
@@ -326,6 +422,7 @@ namespace FastInstall
         private void LoadAvailableEmulators()
         {
             availableEmulators = new ObservableCollection<EmulatorProfileItem>();
+            availableProfiles = new ObservableCollection<EmulatorProfileItem>();
 
             // Add "None" option
             availableEmulators.Add(new EmulatorProfileItem
@@ -342,7 +439,7 @@ namespace FastInstall
 
                 foreach (var emulator in emulators.OrderBy(e => e.Name))
                 {
-                    // Just add the emulator, without trying to access Profiles directly
+                    // Add emulator (no specific profile)
                     availableEmulators.Add(new EmulatorProfileItem
                     {
                         EmulatorId = emulator.Id,
@@ -351,6 +448,50 @@ namespace FastInstall
                         Emulator = emulator,
                         Profile = null
                     });
+
+                    // Add each profile for this emulator (using reflection to safely access SelectableProfiles property)
+                    try
+                    {
+                        // Prefer the official SelectableProfiles API if available
+                        var profilesProperty = emulator.GetType().GetProperty("SelectableProfiles")
+                                              ?? emulator.GetType().GetProperty("Profiles");
+                        if (profilesProperty != null)
+                        {
+                            var profiles = profilesProperty.GetValue(emulator) as IEnumerable;
+                            if (profiles != null)
+                            {
+                                foreach (var profileObj in profiles)
+                                {
+                                    var profile = profileObj as EmulatorProfile;
+                                    if (profile != null)
+                                    {
+                                        var nameProperty = profile.GetType().GetProperty("Name");
+                                        var idProperty = profile.GetType().GetProperty("Id");
+                                        
+                                        var profileName = nameProperty?.GetValue(profile)?.ToString() ?? "Unknown";
+                                        var profileId = idProperty?.GetValue(profile)?.ToString();
+
+                                        if (!string.IsNullOrWhiteSpace(profileId))
+                                        {
+                                            availableProfiles.Add(new EmulatorProfileItem
+                                            {
+                                                EmulatorId = emulator.Id,
+                                                ProfileId = profileId,
+                                                DisplayName = $"{emulator.Name} - {profileName}",
+                                                Emulator = emulator,
+                                                Profile = profile
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception profileEx)
+                    {
+                        // Profiles not available in this Playnite SDK version - skip
+                        LogManager.GetLogger().Debug(profileEx, $"FastInstall: Could not load profiles for emulator '{emulator.Name}'");
+                    }
                 }
             }
             catch (Exception ex)
@@ -359,6 +500,7 @@ namespace FastInstall
             }
 
             OnPropertyChanged(nameof(AvailableEmulators));
+            OnPropertyChanged(nameof(AvailableProfiles));
         }
 
         public void BeginEdit()
@@ -368,6 +510,12 @@ namespace FastInstall
             EditingConfigurations = new ObservableCollection<FolderConfiguration>(
                 Settings.FolderConfigurations.Select(c => Serialization.GetClone(c))
             );
+
+            // Set ViewModel reference on each configuration so they can filter profiles
+            foreach (var config in EditingConfigurations)
+            {
+                config.ViewModel = this;
+            }
 
             // Refresh emulators list in case user added/removed emulators
             LoadAvailableEmulators();
@@ -445,7 +593,8 @@ namespace FastInstall
                         var newConfig = new FolderConfiguration
                         {
                             IsEnabled = true,
-                            Platform = "PC"
+                            Platform = "PC",
+                            ViewModel = this
                         };
                         EditingConfigurations.Add(newConfig);
                         SelectedConfiguration = newConfig;

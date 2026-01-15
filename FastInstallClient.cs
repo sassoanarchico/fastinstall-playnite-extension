@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Playnite.SDK;
 using Playnite.SDK.Models;
 using Playnite.SDK.Plugins;
+using Playnite.SDK.Events;
 
 namespace FastInstall
 {
@@ -62,6 +63,11 @@ namespace FastInstall
                 {
                     // This callback is invoked when installation completes
                     InvokeOnInstalled(installedArgs);
+                },
+                () =>
+                {
+                    // This callback is invoked when installation is cancelled
+                    InvokeOnInstallationCancelled(new GameInstallationCancelledEventArgs());
                 });
         }
     }
@@ -357,9 +363,23 @@ namespace FastInstall
 
         private void LaunchWithEmulator(Playnite.SDK.Models.Emulator emulator)
         {
-            logger.Info($"FastInstall: Launching '{Game.Name}' with emulator '{emulator.Name}'");
+            // Get emulator profile if configured
+            var profile = plugin.GetEmulatorProfileForGame(Game);
+            string profileName = "";
+            if (profile != null)
+            {
+                var nameProperty = profile.GetType().GetProperty("Name");
+                var name = nameProperty?.GetValue(profile)?.ToString();
+                profileName = name != null ? $" (Profile: {name})" : "";
+            }
+            
+            logger.Info($"FastInstall: Launching '{Game.Name}' with emulator '{emulator.Name}'{profileName}");
             logger.Debug($"FastInstall: Emulator ID: {emulator.Id}");
             logger.Debug($"FastInstall: Emulator InstallDir: {emulator.InstallDir ?? "(not set)"}");
+            if (profile != null)
+            {
+                logger.Debug($"FastInstall: Using profile: {profile.Name} (ID: {profile.Id})");
+            }
 
             try
             {
@@ -367,36 +387,101 @@ namespace FastInstall
                 var gamePath = GetGamePathForEmulator();
                 logger.Debug($"FastInstall: Game path: {gamePath}");
 
-                // Determine executable from emulator
+                // Determine executable from emulator profile (if set) or emulator default
                 string executable = null;
                 string workingDir = null;
+                string arguments = null;
 
-                if (!string.IsNullOrWhiteSpace(emulator.InstallDir))
+                // If profile is set, use profile's executable/working directory (using reflection)
+                if (profile != null)
                 {
-                    logger.Debug($"FastInstall: Searching for executable in: {emulator.InstallDir}");
-                    if (Directory.Exists(emulator.InstallDir))
+                    var executableProperty = profile.GetType().GetProperty("Executable");
+                    var workingDirProperty = profile.GetType().GetProperty("WorkingDirectory");
+                    var argumentsProperty = profile.GetType().GetProperty("Arguments");
+
+                    if (executableProperty != null)
                     {
-                        executable = FindEmulatorExecutable(emulator.InstallDir);
-                        logger.Debug($"FastInstall: Found executable: {executable ?? "(not found)"}");
-                        if (!string.IsNullOrWhiteSpace(executable))
+                        var profileExecutable = executableProperty.GetValue(profile)?.ToString();
+                        if (!string.IsNullOrWhiteSpace(profileExecutable))
                         {
-                            workingDir = Path.GetDirectoryName(executable);
+                            executable = profileExecutable;
+                            if (Path.IsPathRooted(executable) && File.Exists(executable))
+                            {
+                                workingDir = Path.GetDirectoryName(executable);
+                            }
+                            else if (!string.IsNullOrWhiteSpace(emulator.InstallDir))
+                            {
+                                // Try relative to emulator install dir
+                                var fullPath = Path.Combine(emulator.InstallDir, executable);
+                                if (File.Exists(fullPath))
+                                {
+                                    executable = fullPath;
+                                    workingDir = Path.GetDirectoryName(executable);
+                                }
+                            }
+                        }
+                    }
+
+                    if (string.IsNullOrWhiteSpace(workingDir) && workingDirProperty != null)
+                    {
+                        var profileWorkingDir = workingDirProperty.GetValue(profile)?.ToString();
+                        if (!string.IsNullOrWhiteSpace(profileWorkingDir))
+                        {
+                            workingDir = profileWorkingDir;
+                            if (!Path.IsPathRooted(workingDir) && !string.IsNullOrWhiteSpace(emulator.InstallDir))
+                            {
+                                workingDir = Path.Combine(emulator.InstallDir, workingDir);
+                            }
+                        }
+                    }
+
+                    // Use profile arguments if available
+                    if (argumentsProperty != null)
+                    {
+                        var profileArguments = argumentsProperty.GetValue(profile)?.ToString();
+                        if (!string.IsNullOrWhiteSpace(profileArguments))
+                        {
+                            arguments = profileArguments.Replace("{ImagePath}", $"\"{gamePath}\"");
+                        }
+                    }
+                }
+
+                // Fallback to emulator default if profile didn't provide executable
+                if (string.IsNullOrWhiteSpace(executable))
+                {
+                    if (!string.IsNullOrWhiteSpace(emulator.InstallDir))
+                    {
+                        logger.Debug($"FastInstall: Searching for executable in: {emulator.InstallDir}");
+                        if (Directory.Exists(emulator.InstallDir))
+                        {
+                            executable = FindEmulatorExecutable(emulator.InstallDir);
+                            logger.Debug($"FastInstall: Found executable: {executable ?? "(not found)"}");
+                            if (!string.IsNullOrWhiteSpace(executable))
+                            {
+                                workingDir = Path.GetDirectoryName(executable);
+                            }
+                        }
+                        else
+                        {
+                            logger.Warn($"FastInstall: Emulator InstallDir does not exist: {emulator.InstallDir}");
                         }
                     }
                     else
                     {
-                        logger.Warn($"FastInstall: Emulator InstallDir does not exist: {emulator.InstallDir}");
+                        logger.Warn($"FastInstall: Emulator InstallDir is not configured");
                     }
                 }
-                else
+
+                // Default arguments if profile didn't provide them
+                if (string.IsNullOrWhiteSpace(arguments))
                 {
-                    logger.Warn($"FastInstall: Emulator InstallDir is not configured");
+                    arguments = $"\"{gamePath}\"";
                 }
 
                 if (string.IsNullOrWhiteSpace(executable) || !File.Exists(executable))
                 {
                     plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                        $"Could not find executable for emulator '{emulator.Name}'.\n\n" +
+                        $"Could not find executable for emulator '{emulator.Name}'{(profile != null ? $" (Profile: {profile.Name})" : "")}.\n\n" +
                         $"Install directory: {emulator.InstallDir ?? "(not configured)"}\n\n" +
                         "Please verify the emulator is properly installed and configured in Playnite settings.",
                         "FastInstall - Emulator Error");
@@ -404,10 +489,9 @@ namespace FastInstall
                     return;
                 }
 
-                var arguments = $"\"{gamePath}\"";
-
                 logger.Info($"FastInstall: Launching with: {executable}");
                 logger.Debug($"FastInstall: Arguments: {arguments}");
+                logger.Debug($"FastInstall: Working directory: {workingDir ?? "(not set)"}");
 
                 var startInfo = new ProcessStartInfo
                 {

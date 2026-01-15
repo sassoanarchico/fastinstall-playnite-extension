@@ -1,7 +1,9 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Windows.Controls;
 using Playnite.SDK;
@@ -44,7 +46,7 @@ namespace FastInstall
         private static readonly ILogger logger = LogManager.GetLogger();
         private FastInstallSettingsViewModel settingsViewModel;
 
-        public const string PluginVersion = "0.1.9";
+        public const string PluginVersion = "0.4.2";
         
         public override Guid Id { get; } = Guid.Parse("F8A1B2C3-D4E5-6789-ABCD-EF1234567890");
         public override string Name => "FastInstall";
@@ -606,15 +608,43 @@ namespace FastInstall
         }
 
         /// <summary>
-        /// Generates a consistent game ID from the source path and game name
-        /// Uses normalized paths to ensure consistency
+        /// Generates a consistent game ID from the source path and game name.
+        /// IMPORTANT: ignores PS3-style codes in brackets (e.g. "[BCES01141]") so that
+        /// renaming folders from "Game [BCES01141]" to "Game" does NOT change the GameId.
+        /// Also normalizes spaces and case to keep IDs stable.
         /// </summary>
         public string GenerateGameId(string sourcePath, string gameName)
         {
+            if (string.IsNullOrWhiteSpace(sourcePath))
+            {
+                throw new ArgumentNullException(nameof(sourcePath));
+            }
+
+            if (string.IsNullOrWhiteSpace(gameName))
+            {
+                gameName = string.Empty;
+            }
+
             // Normalize path to ensure consistent hashing (handle trailing slashes, case, etc.)
-            var normalizedPath = Path.GetFullPath(sourcePath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var normalizedPath = Path.GetFullPath(sourcePath)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             var sourceHash = normalizedPath.GetHashCode().ToString("X8");
-            var cleanName = gameName.ToLowerInvariant().Replace(" ", "_");
+
+            // Normalize game name:
+            // - lower case
+            // - remove codes in square brackets (e.g. " [BCES01141]")
+            // - collapse multiple spaces
+            // - replace spaces with underscore for ID
+            var name = gameName.ToLowerInvariant().Trim();
+
+            // Remove any "[...]" segments (common for PS3 dumps with codes)
+            name = Regex.Replace(name, @"\s*\[[^\]]+\]\s*", " ");
+
+            // Collapse multiple spaces
+            name = Regex.Replace(name, @"\s+", " ").Trim();
+
+            var cleanName = name.Replace(" ", "_");
+
             return $"fastinstall_{sourceHash}_{cleanName}";
         }
 
@@ -891,6 +921,69 @@ namespace FastInstall
             catch (Exception ex)
             {
                 logger.Error(ex, $"FastInstall: Error getting emulator for game '{game.Name}'");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Gets the emulator profile for a game if configured
+        /// </summary>
+        public EmulatorProfile GetEmulatorProfileForGame(Game game)
+        {
+            var config = GetGameConfiguration(game);
+            if (config == null || !config.EmulatorId.HasValue || config.EmulatorId.Value == Guid.Empty)
+            {
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(config.EmulatorProfileId))
+            {
+                return null;
+            }
+
+            try
+            {
+                var emulator = GetEmulatorForGame(game);
+                if (emulator == null)
+                {
+                    return null;
+                }
+
+                // Use reflection to safely access SelectableProfiles/Profiles property
+                var profilesProperty = emulator.GetType().GetProperty("SelectableProfiles")
+                                     ?? emulator.GetType().GetProperty("Profiles");
+                if (profilesProperty == null)
+                {
+                    return null;
+                }
+
+                var profiles = profilesProperty.GetValue(emulator) as IEnumerable;
+                if (profiles == null)
+                {
+                    return null;
+                }
+
+                foreach (var profileObj in profiles)
+                {
+                    var profile = profileObj as EmulatorProfile;
+                    if (profile != null)
+                    {
+                        var idProperty = profile.GetType().GetProperty("Id");
+                        var profileId = idProperty?.GetValue(profile)?.ToString();
+                        
+                        if (profileId == config.EmulatorProfileId)
+                        {
+                            return profile;
+                        }
+                    }
+                }
+
+                logger.Warn($"FastInstall: Emulator profile with ID '{config.EmulatorProfileId}' not found for emulator '{emulator.Name}'");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, $"FastInstall: Error getting emulator profile for game '{game.Name}'");
                 return null;
             }
         }

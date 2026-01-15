@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Playnite.SDK;
@@ -283,6 +285,157 @@ namespace FastInstall
             }
 
             return $"{size:0.##} {suffixes[suffixIndex]}";
+        }
+
+        /// <summary>
+        /// Gets the available free space on the drive containing the specified path
+        /// </summary>
+        public static long GetAvailableFreeSpace(string path)
+        {
+            try
+            {
+                var driveInfo = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(path)));
+                return driveInfo.AvailableFreeSpace;
+            }
+            catch (Exception ex)
+            {
+                logger.Warn(ex, $"FastInstall: Could not get free space for path '{path}'");
+                return -1; // Return -1 to indicate error
+            }
+        }
+
+        /// <summary>
+        /// Checks if there is enough free space on the destination drive for the installation
+        /// Returns true if there's enough space, false otherwise
+        /// </summary>
+        public static bool CheckDiskSpace(string sourcePath, string destinationPath, out long requiredBytes, out long availableBytes)
+        {
+            requiredBytes = GetDirectorySize(sourcePath);
+            availableBytes = GetAvailableFreeSpace(destinationPath);
+
+            if (availableBytes < 0)
+            {
+                // Could not determine free space, assume it's OK (user will get error during copy if not)
+                return true;
+            }
+
+            // Add 10% buffer for safety
+            var requiredWithBuffer = (long)(requiredBytes * 1.1);
+            return availableBytes >= requiredWithBuffer;
+        }
+
+        /// <summary>
+        /// Result of an integrity check operation
+        /// </summary>
+        public class IntegrityCheckResult
+        {
+            public bool IsValid { get; set; }
+            public int TotalFiles { get; set; }
+            public int VerifiedFiles { get; set; }
+            public int MissingFiles { get; set; }
+            public int MismatchedFiles { get; set; }
+            public List<string> MissingFilePaths { get; set; } = new List<string>();
+            public List<string> MismatchedFilePaths { get; set; } = new List<string>();
+            public string ErrorMessage { get; set; }
+        }
+
+        /// <summary>
+        /// Verifies the integrity of copied files by comparing source and destination
+        /// Checks file existence and sizes (quick check)
+        /// </summary>
+        public static IntegrityCheckResult VerifyCopyIntegrity(
+            string sourcePath,
+            string destinationPath,
+            Action<string> progressCallback = null,
+            CancellationToken cancellationToken = default)
+        {
+            var result = new IntegrityCheckResult();
+
+            try
+            {
+                if (!Directory.Exists(sourcePath))
+                {
+                    result.ErrorMessage = $"Source directory does not exist: {sourcePath}";
+                    return result;
+                }
+
+                if (!Directory.Exists(destinationPath))
+                {
+                    result.ErrorMessage = $"Destination directory does not exist: {destinationPath}";
+                    return result;
+                }
+
+                progressCallback?.Invoke("Verifica integrità file in corso...");
+
+                var sourceFiles = Directory.GetFiles(sourcePath, "*", SearchOption.AllDirectories).ToList();
+                result.TotalFiles = sourceFiles.Count;
+
+                foreach (var sourceFile in sourceFiles)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        result.ErrorMessage = "Verifica annullata dall'utente";
+                        return result;
+                    }
+
+                    var relativePath = sourceFile.Substring(sourcePath.Length).TrimStart(Path.DirectorySeparatorChar);
+                    var destFile = Path.Combine(destinationPath, relativePath);
+
+                    progressCallback?.Invoke($"Verifica: {relativePath}");
+
+                    // Check if file exists
+                    if (!File.Exists(destFile))
+                    {
+                        result.MissingFiles++;
+                        result.MissingFilePaths.Add(relativePath);
+                        logger.Warn($"FastInstall: Missing file in destination: {relativePath}");
+                        continue;
+                    }
+
+                    // Check file sizes
+                    try
+                    {
+                        var sourceSize = new FileInfo(sourceFile).Length;
+                        var destSize = new FileInfo(destFile).Length;
+
+                        if (sourceSize != destSize)
+                        {
+                            result.MismatchedFiles++;
+                            result.MismatchedFilePaths.Add(relativePath);
+                            logger.Warn($"FastInstall: Size mismatch for {relativePath}: source={sourceSize}, dest={destSize}");
+                        }
+                        else
+                        {
+                            result.VerifiedFiles++;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Warn(ex, $"FastInstall: Could not verify file {relativePath}");
+                        result.MismatchedFiles++;
+                        result.MismatchedFilePaths.Add(relativePath);
+                    }
+                }
+
+                result.IsValid = result.MissingFiles == 0 && result.MismatchedFiles == 0;
+
+                if (result.IsValid)
+                {
+                    logger.Info($"FastInstall: Integrity check passed. Verified {result.VerifiedFiles}/{result.TotalFiles} files");
+                }
+                else
+                {
+                    logger.Warn($"FastInstall: Integrity check failed. Missing: {result.MissingFiles}, Mismatched: {result.MismatchedFiles}");
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "FastInstall: Error during integrity check");
+                result.ErrorMessage = $"Errore durante la verifica: {ex.Message}";
+                return result;
+            }
         }
     }
 }

@@ -96,13 +96,12 @@ namespace FastInstall
         public void ShowCancelled()
         {
             isCompleted = true;
-            
+
             StatusText.Text = "Installation cancelled. Cleaning up...";
             StatusText.Foreground = System.Windows.Media.Brushes.Orange;
             
             CancelButton.Content = "Close";
             CancelButton.Background = System.Windows.Media.Brushes.Gray;
-            CancelButton.IsEnabled = false;
         }
 
         private void MinimizeButton_Click(object sender, RoutedEventArgs e)

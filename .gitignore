@@ -50,7 +50,7 @@ build.log
 *.pext
 
 # Local release checklog (not committed)
-checklog.txt
+*.txt
 
 # .NET Core
 project.lock.json

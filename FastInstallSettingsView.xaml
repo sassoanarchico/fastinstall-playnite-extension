@@ -98,13 +98,26 @@
                 </DataGridTemplateColumn>
 
                 <!-- Emulator Column -->
-                <DataGridTemplateColumn Header="Emulator (Optional)" Width="2.5*">
+                <DataGridTemplateColumn Header="Emulator (Optional)" Width="2*">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <ComboBox ItemsSource="{Binding DataContext.AvailableEmulators, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                       DisplayMemberPath="DisplayName"
-                                      SelectedValuePath="SelectionKey"
-                                      SelectedValue="{Binding EmulatorSelectionKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      SelectedValuePath="EmulatorId"
+                                      SelectedValue="{Binding EmulatorId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      VerticalContentAlignment="Center"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Emulator Profile Column -->
+                <DataGridTemplateColumn Header="Emulator Profile" Width="2*">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <ComboBox ItemsSource="{Binding AvailableProfilesForEmulator}"
+                                      DisplayMemberPath="DisplayName"
+                                      SelectedValuePath="ProfileId"
+                                      SelectedValue="{Binding EmulatorProfileId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                       VerticalContentAlignment="Center"/>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>

@@ -22,6 +22,7 @@ namespace FastInstall
         public CancellationTokenSource CancellationTokenSource { get; set; }
         public InstallationProgressWindow ProgressWindow { get; set; }
         public Action<GameInstalledEventArgs> OnInstalled { get; set; }
+        public Action OnCancelled { get; set; }
         public DateTime StartTime { get; set; }
         public InstallationStatus Status { get; set; }
     }
@@ -95,7 +96,8 @@ namespace FastInstall
             Game game,
             string sourcePath,
             string destinationPath,
-            Action<GameInstalledEventArgs> onInstalled)
+            Action<GameInstalledEventArgs> onInstalled,
+            Action onCancelled = null)
         {
             if (IsInstalling(game.Id))
             {
@@ -116,6 +118,7 @@ namespace FastInstall
                 DestinationPath = destinationPath,
                 CancellationTokenSource = cts,
                 OnInstalled = onInstalled,
+                OnCancelled = onCancelled,
                 StartTime = DateTime.Now,
                 Status = InstallationStatus.Pending
             };
@@ -194,6 +197,69 @@ namespace FastInstall
             {
                 logger.Info($"FastInstall: Installing '{job.Game.Name}' from '{job.SourcePath}' to '{job.DestinationPath}'");
 
+                // Check disk space before starting installation
+                bool hasEnoughSpace = FileCopyHelper.CheckDiskSpace(
+                    job.SourcePath,
+                    job.DestinationPath,
+                    out long requiredBytes,
+                    out long availableBytes);
+
+                if (!hasEnoughSpace)
+                {
+                    var requiredFormatted = FileCopyHelper.FormatBytes(requiredBytes);
+                    var availableFormatted = FileCopyHelper.FormatBytes(availableBytes);
+                    var missingFormatted = FileCopyHelper.FormatBytes(requiredBytes - availableBytes);
+
+                    logger.Warn($"FastInstall: Insufficient disk space. Required: {requiredFormatted}, Available: {availableFormatted}");
+
+                    // Show warning dialog on UI thread and wait for user response
+                    var userResponse = await Task.Run(() =>
+                    {
+                        var dialogResult = MessageBoxResult.No;
+                        playniteApi.MainView.UIDispatcher.Invoke(() =>
+                        {
+                            dialogResult = MessageBox.Show(
+                                $"Spazio su disco insufficiente!\n\n" +
+                                $"Gioco: {job.Game.Name}\n" +
+                                $"Spazio richiesto: {requiredFormatted}\n" +
+                                $"Spazio disponibile: {availableFormatted}\n" +
+                                $"Spazio mancante: {missingFormatted}\n\n" +
+                                $"Vuoi continuare comunque? L'installazione potrebbe fallire.",
+                                "FastInstall - Spazio su disco insufficiente",
+                                MessageBoxButton.YesNo,
+                                MessageBoxImage.Warning);
+                        });
+                        return dialogResult;
+                    });
+
+                    if (userResponse == MessageBoxResult.No)
+                    {
+                        job.Status = InstallationStatus.Cancelled;
+                        playniteApi.MainView.UIDispatcher.Invoke(() =>
+                        {
+                            job.ProgressWindow?.ShowError("Installazione annullata: spazio su disco insufficiente");
+                            job.ProgressWindow?.AllowClose();
+                        });
+
+                        playniteApi.Notifications.Add(new NotificationMessage(
+                            $"FastInstall_InsufficientSpace_{job.Game.Id}",
+                            $"Installazione di '{job.Game.Name}' annullata: spazio su disco insufficiente",
+                            NotificationType.Error));
+
+                        logger.Info($"FastInstall: Installation of '{job.Game.Name}' cancelled due to insufficient disk space");
+
+                        // Notify controller that installation was cancelled
+                        job.OnCancelled?.Invoke();
+                        return;
+                    }
+
+                    logger.Info($"FastInstall: User chose to continue despite insufficient disk space");
+                }
+                else
+                {
+                    logger.Info($"FastInstall: Disk space check passed. Required: {FileCopyHelper.FormatBytes(requiredBytes)}, Available: {FileCopyHelper.FormatBytes(availableBytes)}");
+                }
+
                 // Ensure destination parent directory exists
                 var destParent = Path.GetDirectoryName(job.DestinationPath);
                 if (!Directory.Exists(destParent))
@@ -227,15 +293,101 @@ namespace FastInstall
                     });
 
                     logger.Info($"FastInstall: Installation of '{job.Game.Name}' was cancelled");
+
+                    // Close the progress window automatically after a short delay (2 seconds)
+                    _ = Task.Delay(2000).ContinueWith(_ =>
+                    {
+                        playniteApi.MainView.UIDispatcher.Invoke(() =>
+                        {
+                            job.ProgressWindow?.Close();
+                        });
+                    });
+
+                    // Notify controller that installation was cancelled
+                    job.OnCancelled?.Invoke();
                 }
                 else if (result)
                 {
+                    // Perform integrity check after copy
+                    logger.Info($"FastInstall: Starting integrity check for '{job.Game.Name}'...");
+                    
+                    playniteApi.MainView.UIDispatcher.Invoke(() =>
+                    {
+                        if (job.ProgressWindow != null)
+                        {
+                            job.ProgressWindow.StatusText.Text = "Verifica integrità file...";
+                        }
+                    });
+
+                    var integrityResult = await Task.Run(() =>
+                    {
+                        return FileCopyHelper.VerifyCopyIntegrity(
+                            job.SourcePath,
+                            job.DestinationPath,
+                            (message) =>
+                            {
+                                playniteApi.MainView.UIDispatcher.Invoke(() =>
+                                {
+                                    if (job.ProgressWindow != null)
+                                    {
+                                        job.ProgressWindow.StatusText.Text = message;
+                                    }
+                                });
+                            },
+                            job.CancellationTokenSource.Token);
+                    });
+
+                    if (!integrityResult.IsValid)
+                    {
+                        var errorDetails = new System.Text.StringBuilder();
+                        errorDetails.AppendLine($"Verifica integrità fallita per '{job.Game.Name}':");
+                        
+                        if (integrityResult.MissingFiles > 0)
+                        {
+                            errorDetails.AppendLine($"File mancanti: {integrityResult.MissingFiles}");
+                            if (integrityResult.MissingFilePaths.Count > 0)
+                            {
+                                errorDetails.AppendLine($"Primi file mancanti: {string.Join(", ", integrityResult.MissingFilePaths.Take(5))}");
+                            }
+                        }
+                        
+                        if (integrityResult.MismatchedFiles > 0)
+                        {
+                            errorDetails.AppendLine($"File con dimensioni diverse: {integrityResult.MismatchedFiles}");
+                            if (integrityResult.MismatchedFilePaths.Count > 0)
+                            {
+                                errorDetails.AppendLine($"Primi file con problemi: {string.Join(", ", integrityResult.MismatchedFilePaths.Take(5))}");
+                            }
+                        }
+
+                        logger.Error($"FastInstall: Integrity check failed for '{job.Game.Name}'. Missing: {integrityResult.MissingFiles}, Mismatched: {integrityResult.MismatchedFiles}");
+
+                        // Show error notification
+                        playniteApi.Notifications.Add(new NotificationMessage(
+                            $"FastInstall_IntegrityError_{job.Game.Id}",
+                            $"Verifica integrità fallita per '{job.Game.Name}'. Alcuni file potrebbero essere corrotti.",
+                            NotificationType.Error));
+
+                        // Show error in progress window
+                        playniteApi.MainView.UIDispatcher.Invoke(() =>
+                        {
+                            job.ProgressWindow?.ShowError($"Verifica integrità fallita: {integrityResult.MissingFiles} file mancanti, {integrityResult.MismatchedFiles} file con problemi");
+                        });
+                    }
+                    else
+                    {
+                        logger.Info($"FastInstall: Integrity check passed for '{job.Game.Name}'. Verified {integrityResult.VerifiedFiles}/{integrityResult.TotalFiles} files");
+                    }
+
                     job.Status = InstallationStatus.Completed;
                     
                     // Update UI
                     playniteApi.MainView.UIDispatcher.Invoke(() =>
                     {
-                        job.ProgressWindow?.ShowCompleted();
+                        if (integrityResult.IsValid)
+                        {
+                            job.ProgressWindow?.ShowCompleted();
+                        }
                         
                         // Invoke the completion callback
                         job.OnInstalled?.Invoke(new GameInstalledEventArgs(new GameInstallationData
@@ -245,12 +397,16 @@ namespace FastInstall
                     });
 
                     // Show notification in Italian
+                    var notificationMessage = integrityResult.IsValid
+                        ? $"Installazione del gioco {job.Game.Name} completata"
+                        : $"Installazione del gioco {job.Game.Name} completata con errori di integrità";
+
                     playniteApi.Notifications.Add(new NotificationMessage(
                         $"FastInstall_Complete_{job.Game.Id}",
-                        $"Installazione del gioco {job.Game.Name} completata",
-                        NotificationType.Info));
+                        notificationMessage,
+                        integrityResult.IsValid ? NotificationType.Info : NotificationType.Error));
 
-                    logger.Info($"FastInstall: Successfully installed '{job.Game.Name}'");
+                    logger.Info($"FastInstall: Successfully installed '{job.Game.Name}' (Integrity: {(integrityResult.IsValid ? "OK" : "FAILED")})");
 
                     // Close the progress window automatically after a short delay (2 seconds)
                     _ = Task.Delay(2000).ContinueWith(_ =>
@@ -274,6 +430,18 @@ namespace FastInstall
                 });
 
                 logger.Info($"FastInstall: Installation of '{job.Game.Name}' was cancelled");
+
+                // Close the progress window automatically after a short delay (2 seconds)
+                _ = Task.Delay(2000).ContinueWith(_ =>
+                {
+                    playniteApi.MainView.UIDispatcher.Invoke(() =>
+                    {
+                        job.ProgressWindow?.Close();
+                    });
+                });
+
+                // Notify controller that installation was cancelled
+                job.OnCancelled?.Invoke();
             }
             catch (Exception ex)
             {
@@ -298,12 +466,8 @@ namespace FastInstall
             }
             finally
             {
-                // Remove from active installations after a delay to allow window interaction
-                _ = Task.Run(async () =>
-                {
-                    await Task.Delay(TimeSpan.FromMinutes(5));
-                    activeInstallations.TryRemove(job.Game.Id, out _);
-                });
+                // Installation job finished (completed / cancelled / failed) -> remove from active installations
+                activeInstallations.TryRemove(job.Game.Id, out _);
             }
         }
 
