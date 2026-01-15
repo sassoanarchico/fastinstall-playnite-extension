@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Threading;
 using Playnite.SDK.Models;
@@ -166,6 +167,20 @@ namespace FastInstall
             Close();
         }
 
+        private void PriorityComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is ComboBox comboBox && comboBox.Tag is Guid gameId)
+            {
+                var instance = BackgroundInstallManager.Instance;
+                if (instance != null && comboBox.SelectedIndex >= 0)
+                {
+                    InstallationPriority priority = (InstallationPriority)comboBox.SelectedIndex;
+                    instance.SetJobPriority(gameId, priority);
+                    RefreshDownloads();
+                }
+            }
+        }
+
         protected override void OnClosed(EventArgs e)
         {
             refreshTimer?.Stop();
@@ -177,6 +192,8 @@ namespace FastInstall
     {
         public Guid GameId { get; set; }
         public string GameName { get; set; }
+        public string PriorityText { get; set; }
+        public int PriorityIndex { get; set; }
         public string StatusText { get; set; }
         public string ProgressText { get; set; }
         public string SpeedText { get; set; }
@@ -193,6 +210,27 @@ namespace FastInstall
         {
             GameId = job.Game.Id;
             GameName = job.Game.Name;
+
+            // Set priority text and index
+            switch (job.Priority)
+            {
+                case InstallationPriority.Low:
+                    PriorityText = "Low";
+                    PriorityIndex = 0;
+                    break;
+                case InstallationPriority.Normal:
+                    PriorityText = "Normal";
+                    PriorityIndex = 1;
+                    break;
+                case InstallationPriority.High:
+                    PriorityText = "High";
+                    PriorityIndex = 2;
+                    break;
+                default:
+                    PriorityText = "Normal";
+                    PriorityIndex = 1;
+                    break;
+            }
 
             switch (job.Status)
             {

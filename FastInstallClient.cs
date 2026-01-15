@@ -8,6 +8,7 @@ using Playnite.SDK;
 using Playnite.SDK.Models;
 using Playnite.SDK.Plugins;
 using Playnite.SDK.Events;
+using System.Windows;
 
 namespace FastInstall
 {
@@ -52,7 +53,53 @@ namespace FastInstall
                 return;
             }
 
-            logger.Info($"FastInstall: Starting background installation for '{Game.Name}'");
+            // Check for existing installation and handle conflict
+            if (Directory.Exists(destinationPath))
+            {
+                var conflictResolution = plugin.Settings?.ConflictResolution ?? ConflictResolution.Ask;
+                
+                if (conflictResolution == ConflictResolution.Skip)
+                {
+                    plugin.PlayniteApi.Dialogs.ShowMessage(
+                        $"'{Game.Name}' is already installed at:\n{destinationPath}\n\nInstallation skipped.",
+                        "FastInstall - Already Installed",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                    return;
+                }
+                else if (conflictResolution == ConflictResolution.Ask)
+                {
+                    var result = plugin.PlayniteApi.Dialogs.ShowMessage(
+                        $"'{Game.Name}' is already installed at:\n{destinationPath}\n\n" +
+                        "Do you want to overwrite the existing installation?",
+                        "FastInstall - Installation Conflict",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Question);
+                    
+                    if (result != MessageBoxResult.Yes)
+                    {
+                        logger.Info($"FastInstall: User cancelled installation of '{Game.Name}' due to existing installation");
+                        return;
+                    }
+                }
+                // If Overwrite, continue with installation
+            }
+
+            // Calculate and show disk space requirement
+            long requiredBytes = 0;
+            long availableBytes = 0;
+            bool hasEnoughSpace = FileCopyHelper.CheckDiskSpace(sourcePath, destinationPath, out requiredBytes, out availableBytes);
+            
+            var requiredFormatted = FileCopyHelper.FormatBytes(requiredBytes);
+            var availableFormatted = FileCopyHelper.FormatBytes(availableBytes);
+            
+            // Show space requirement notification
+            plugin.PlayniteApi.Notifications.Add(new NotificationMessage(
+                $"FastInstall_SpaceInfo_{Game.Id}",
+                $"'{Game.Name}': Required: {requiredFormatted}, Available: {availableFormatted}",
+                NotificationType.Info));
+
+            logger.Info($"FastInstall: Starting background installation for '{Game.Name}' (Required: {requiredFormatted}, Available: {availableFormatted})");
 
             // Start background installation - Playnite remains fully usable!
             BackgroundInstallManager.Instance.StartInstallation(

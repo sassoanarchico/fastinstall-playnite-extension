@@ -186,11 +186,23 @@ namespace FastInstall
         public string EmulatorPath { get; set; }
     }
 
+    /// <summary>
+    /// How to handle conflicts when destination already exists
+    /// </summary>
+    public enum ConflictResolution
+    {
+        Ask,        // Ask user each time
+        Overwrite,  // Always overwrite
+        Skip        // Skip installation if exists
+    }
+
     public class FastInstallSettings : ObservableObject
     {
         private ObservableCollection<FolderConfiguration> folderConfigurations = new ObservableCollection<FolderConfiguration>();
         private bool enableParallelDownloads = false;
         private int maxParallelDownloads = 2;
+        private ConflictResolution conflictResolution = ConflictResolution.Ask;
+        private string sevenZipPath = string.Empty;
 
         // Legacy settings - kept for backward compatibility
         private string sourceArchiveDirectory = string.Empty;
@@ -242,6 +254,25 @@ namespace FastInstall
         public int EffectiveMaxParallelDownloads
         {
             get => enableParallelDownloads ? maxParallelDownloads : 1;
+        }
+
+        /// <summary>
+        /// How to handle conflicts when destination directory already exists
+        /// </summary>
+        public ConflictResolution ConflictResolution
+        {
+            get => conflictResolution;
+            set => SetValue(ref conflictResolution, value);
+        }
+
+        /// <summary>
+        /// Path to 7-Zip executable (7z.exe or 7za.exe)
+        /// Required for extracting ZIP, RAR, and 7Z archives
+        /// </summary>
+        public string SevenZipPath
+        {
+            get => sevenZipPath;
+            set => SetValue(ref sevenZipPath, value);
         }
 
         // Legacy properties - kept for backward compatibility
@@ -323,7 +354,7 @@ namespace FastInstall
 
     public class FastInstallSettingsViewModel : ObservableObject, ISettings
     {
-        private readonly FastInstallPlugin plugin;
+        internal readonly FastInstallPlugin plugin;
         private FastInstallSettings editingClone;
         private FastInstallSettings settings;
         private ObservableCollection<FolderConfiguration> editingConfigurations;
@@ -565,6 +596,9 @@ namespace FastInstall
             
             // Apply max parallel downloads setting
             BackgroundInstallManager.Instance?.SetMaxParallelInstalls(Settings.EffectiveMaxParallelDownloads);
+            
+            // Update 7-Zip path getter
+            BackgroundInstallManager.Instance?.SetSevenZipPathGetter(() => Settings.SevenZipPath ?? string.Empty);
         }
 
         public void CancelEdit()
@@ -588,6 +622,9 @@ namespace FastInstall
 
             // Apply max parallel downloads setting
             BackgroundInstallManager.Instance?.SetMaxParallelInstalls(Settings.EffectiveMaxParallelDownloads);
+            
+            // Update 7-Zip path getter
+            BackgroundInstallManager.Instance?.SetSevenZipPathGetter(() => Settings.SevenZipPath ?? string.Empty);
 
             // Save settings
             plugin.SavePluginSettings(Settings);

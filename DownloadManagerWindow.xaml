@@ -50,6 +50,7 @@
                   Margin="0,0,0,15">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Game" Binding="{Binding GameName}" Width="2*" IsReadOnly="True"/>
+                <DataGridTextColumn Header="Priority" Binding="{Binding PriorityText}" Width="80" IsReadOnly="True"/>
                 <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="120" IsReadOnly="True"/>
                 <DataGridTextColumn Header="Progress" Binding="{Binding ProgressText}" Width="100" IsReadOnly="True"/>
                 <DataGridTextColumn Header="Speed" Binding="{Binding SpeedText}" Width="100" IsReadOnly="True"/>
@@ -87,6 +88,16 @@
                                         Background="#D32F2F"
                                         Foreground="White"
                                         BorderThickness="0"/>
+                                <ComboBox Width="80" 
+                                          Height="25"
+                                          Margin="2"
+                                          SelectionChanged="PriorityComboBox_SelectionChanged"
+                                          Tag="{Binding GameId}"
+                                          SelectedIndex="{Binding PriorityIndex}">
+                                    <ComboBoxItem Content="Low"/>
+                                    <ComboBoxItem Content="Normal"/>
+                                    <ComboBoxItem Content="High"/>
+                                </ComboBox>
                             </StackPanel>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>

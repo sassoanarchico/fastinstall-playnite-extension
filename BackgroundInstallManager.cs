@@ -13,6 +13,16 @@ using Playnite.SDK.Plugins;
 namespace FastInstall
 {
     /// <summary>
+    /// Installation priority levels
+    /// </summary>
+    public enum InstallationPriority
+    {
+        Low = 0,
+        Normal = 1,
+        High = 2
+    }
+
+    /// <summary>
     /// Represents an active installation job
     /// </summary>
     public class InstallationJob
@@ -27,6 +37,7 @@ namespace FastInstall
         public DateTime StartTime { get; set; }
         public InstallationStatus Status { get; set; }
         public bool IsPaused { get; set; } // Flag to distinguish pause from cancellation
+        public InstallationPriority Priority { get; set; } = InstallationPriority.Normal;
     }
 
     public enum InstallationStatus
@@ -50,12 +61,14 @@ namespace FastInstall
         
         private readonly ConcurrentDictionary<Guid, InstallationJob> activeInstallations;
         private readonly ConcurrentQueue<InstallationJob> installQueue;
+        private readonly object queueLock = new object(); // For priority-based queue management
         private readonly IPlayniteAPI playniteAPI;
         private SemaphoreSlim parallelInstallSemaphore;
         private int maxParallelInstalls = 1; // Default: sequential
         private readonly object settingsLock = new object();
         private Task queueProcessorTask;
         private readonly object queueProcessorLock = new object();
+        private Func<string> getSevenZipPathFunc; // Function to get 7-Zip path from settings
 
         public static BackgroundInstallManager Instance
         {
@@ -67,23 +80,40 @@ namespace FastInstall
             }
         }
 
-        public static void Initialize(IPlayniteAPI api)
+        public static void Initialize(IPlayniteAPI api, Func<string> getSevenZipPath = null)
         {
             lock (lockObj)
             {
                 if (instance == null)
                 {
-                    instance = new BackgroundInstallManager(api);
+                    instance = new BackgroundInstallManager(api, getSevenZipPath);
                 }
             }
         }
 
-        private BackgroundInstallManager(IPlayniteAPI api)
+        private BackgroundInstallManager(IPlayniteAPI api, Func<string> getSevenZipPath = null)
         {
             playniteAPI = api;
             activeInstallations = new ConcurrentDictionary<Guid, InstallationJob>();
             installQueue = new ConcurrentQueue<InstallationJob>();
             parallelInstallSemaphore = new SemaphoreSlim(maxParallelInstalls, maxParallelInstalls);
+            getSevenZipPathFunc = getSevenZipPath;
+        }
+
+        /// <summary>
+        /// Sets the function to get 7-Zip path from settings
+        /// </summary>
+        public void SetSevenZipPathGetter(Func<string> getter)
+        {
+            getSevenZipPathFunc = getter;
+        }
+
+        /// <summary>
+        /// Gets the 7-Zip path from settings
+        /// </summary>
+        private string GetSevenZipPath()
+        {
+            return getSevenZipPathFunc?.Invoke() ?? string.Empty;
         }
 
         /// <summary>
@@ -146,7 +176,8 @@ namespace FastInstall
             string sourcePath,
             string destinationPath,
             Action<GameInstalledEventArgs> onInstalled,
-            Action onCancelled = null)
+            Action onCancelled = null,
+            InstallationPriority priority = InstallationPriority.Normal)
         {
             if (IsInstalling(game.Id))
             {
@@ -169,11 +200,34 @@ namespace FastInstall
                 OnInstalled = onInstalled,
                 OnCancelled = onCancelled,
                 StartTime = DateTime.Now,
-                Status = InstallationStatus.Pending
+                Status = InstallationStatus.Pending,
+                Priority = priority
             };
 
             activeInstallations[game.Id] = job;
-            installQueue.Enqueue(job);
+            
+            // Enqueue with priority consideration
+            lock (queueLock)
+            {
+                if (priority == InstallationPriority.High)
+                {
+                    // For high priority, insert at the front
+                    var tempList = new List<InstallationJob>();
+                    while (installQueue.TryDequeue(out var existingJob))
+                    {
+                        tempList.Add(existingJob);
+                    }
+                    tempList.Insert(0, job); // Insert high priority at front
+                    foreach (var j in tempList)
+                    {
+                        installQueue.Enqueue(j);
+                    }
+                }
+                else
+                {
+                    installQueue.Enqueue(job);
+                }
+            }
 
             // Create and show progress window on UI thread
             playniteAPI.MainView.UIDispatcher.Invoke(() =>
@@ -219,32 +273,38 @@ namespace FastInstall
                     
                     if (currentRunning < maxParallel)
                     {
-                        // Try to get a job from queue
+                        // Try to get a job from queue (respecting priority)
                         InstallationJob job = null;
-                        var tempQueue = new Queue<InstallationJob>();
-                        
-                        // Look for a non-paused job
-                        while (installQueue.TryDequeue(out var candidateJob))
+                        lock (queueLock)
                         {
-                            if (candidateJob.Status == InstallationStatus.Paused)
+                            // Get all jobs and sort by priority
+                            var jobsList = new List<InstallationJob>();
+                            while (installQueue.TryDequeue(out var tempJob))
                             {
-                                // Re-queue paused jobs
-                                tempQueue.Enqueue(candidateJob);
+                                jobsList.Add(tempJob);
                             }
-                            else if (job == null)
+                            
+                            // Separate paused and active jobs
+                            var pausedJobs = jobsList.Where(j => j.Status == InstallationStatus.Paused || j.IsPaused).ToList();
+                            var activeJobs = jobsList.Except(pausedJobs).ToList();
+                            
+                            // Sort active jobs by priority (High first), then by StartTime (oldest first)
+                            activeJobs = activeJobs
+                                .OrderByDescending(j => j.Priority)
+                                .ThenBy(j => j.StartTime)
+                                .ToList();
+                            
+                            if (activeJobs.Count > 0)
                             {
-                                job = candidateJob;
+                                job = activeJobs[0];
+                                activeJobs.RemoveAt(0);
                             }
-                            else
+                            
+                            // Re-enqueue remaining jobs (active first, then paused)
+                            foreach (var j in activeJobs.Concat(pausedJobs))
                             {
-                                tempQueue.Enqueue(candidateJob);
+                                installQueue.Enqueue(j);
                             }
-                        }
-                        
-                        // Re-queue all items back
-                        while (tempQueue.Count > 0)
-                        {
-                            installQueue.Enqueue(tempQueue.Dequeue());
                         }
                         
                         if (job == null)
@@ -320,9 +380,24 @@ namespace FastInstall
             // Remove from active installations immediately
             activeInstallations.TryRemove(job.Game.Id, out _);
             
-            // Update UI - show cancelled but don't show "Cleaning up" since nothing was copied
+            // Restore original game name
             playniteAPI.MainView.UIDispatcher.Invoke(() =>
             {
+                try
+                {
+                    var dbGame = playniteAPI.Database.Games.Get(job.Game.Id);
+                    if (dbGame != null)
+                    {
+                        var originalName = dbGame.Name.Replace(" [In Queue]", "").Replace(" [Downloading...]", "");
+                        if (dbGame.Name != originalName)
+                        {
+                            dbGame.Name = originalName;
+                            playniteAPI.Database.Games.Update(dbGame);
+                        }
+                    }
+                }
+                catch { }
+                
                 if (job.ProgressWindow != null)
                 {
                     job.ProgressWindow.StatusText.Text = "Installation cancelled";
@@ -353,6 +428,22 @@ namespace FastInstall
             // Clear pause flag and set status to InProgress when starting/resuming
             job.IsPaused = false;
             job.Status = InstallationStatus.InProgress;
+
+            // Update game name in Playnite to show "Downloading" status
+            playniteAPI.MainView.UIDispatcher.Invoke(() =>
+            {
+                try
+                {
+                    var dbGame = playniteAPI.Database.Games.Get(job.Game.Id);
+                    if (dbGame != null && !dbGame.Name.Contains("[Downloading...]"))
+                    {
+                        var originalName = dbGame.Name.Replace(" [In Queue]", "").Replace(" [Downloading...]", "");
+                        dbGame.Name = $"{originalName} [Downloading...]";
+                        playniteAPI.Database.Games.Update(dbGame);
+                    }
+                }
+                catch { }
+            });
 
             try
             {
@@ -421,6 +512,128 @@ namespace FastInstall
                     logger.Info($"FastInstall: Disk space check passed. Required: {FileCopyHelper.FormatBytes(requiredBytes)}, Available: {FileCopyHelper.FormatBytes(availableBytes)}");
                 }
 
+                // Check if source is an archive file or contains archives
+                string actualSourcePath = job.SourcePath;
+                string tempExtractPath = null;
+                bool needsArchiveCleanup = false;
+
+                // Check if source path is a file (archive)
+                if (File.Exists(job.SourcePath) && ArchiveHelper.IsArchiveFile(job.SourcePath))
+                {
+                    // Source is an archive file - extract it first
+                    var sevenZipPath = GetSevenZipPath();
+                    if (string.IsNullOrWhiteSpace(sevenZipPath))
+                    {
+                        throw new Exception("7-Zip path is not configured. Please set it in FastInstall settings.");
+                    }
+
+                    // Create temporary extraction directory
+                    tempExtractPath = Path.Combine(Path.GetTempPath(), "FastInstall_Extract_" + Guid.NewGuid().ToString("N"));
+                    Directory.CreateDirectory(tempExtractPath);
+                    needsArchiveCleanup = true;
+
+                    playniteAPI.MainView.UIDispatcher.Invoke(() =>
+                    {
+                        if (job.ProgressWindow != null)
+                        {
+                            job.ProgressWindow.StatusText.Text = "Extracting archive...";
+                        }
+                    });
+
+                    // Extract archive
+                    var extractResult = await ArchiveHelper.ExtractArchive(
+                        job.SourcePath,
+                        tempExtractPath,
+                        sevenZipPath,
+                        (progressMessage) =>
+                        {
+                            playniteAPI.MainView.UIDispatcher.Invoke(() =>
+                            {
+                                if (job.ProgressWindow != null)
+                                {
+                                    job.ProgressWindow.StatusText.Text = progressMessage;
+                                }
+                            });
+                        },
+                        job.CancellationTokenSource.Token);
+
+                    if (!extractResult)
+                    {
+                        throw new Exception("Archive extraction failed or was cancelled.");
+                    }
+
+                    // After extraction, use the extracted directory as source
+                    // If extraction created a single subdirectory, use that
+                    var extractedDirs = Directory.GetDirectories(tempExtractPath);
+                    if (extractedDirs.Length == 1)
+                    {
+                        actualSourcePath = extractedDirs[0];
+                    }
+                    else
+                    {
+                        actualSourcePath = tempExtractPath;
+                    }
+                }
+                else if (Directory.Exists(job.SourcePath) && ArchiveHelper.ContainsArchives(job.SourcePath))
+                {
+                    // Source directory contains archive files - extract the first one found
+                    var archiveFile = ArchiveHelper.FindArchiveFile(job.SourcePath);
+                    if (archiveFile != null)
+                    {
+                        var sevenZipPath = GetSevenZipPath();
+                        if (string.IsNullOrWhiteSpace(sevenZipPath))
+                        {
+                            throw new Exception("7-Zip path is not configured. Please set it in FastInstall settings.");
+                        }
+
+                        // Create temporary extraction directory
+                        tempExtractPath = Path.Combine(Path.GetTempPath(), "FastInstall_Extract_" + Guid.NewGuid().ToString("N"));
+                        Directory.CreateDirectory(tempExtractPath);
+                        needsArchiveCleanup = true;
+
+                        playniteAPI.MainView.UIDispatcher.Invoke(() =>
+                        {
+                            if (job.ProgressWindow != null)
+                            {
+                                job.ProgressWindow.StatusText.Text = "Extracting archive...";
+                            }
+                        });
+
+                        // Extract archive
+                        var extractResult = await ArchiveHelper.ExtractArchive(
+                            archiveFile,
+                            tempExtractPath,
+                            sevenZipPath,
+                            (progressMessage) =>
+                            {
+                                playniteAPI.MainView.UIDispatcher.Invoke(() =>
+                                {
+                                    if (job.ProgressWindow != null)
+                                    {
+                                        job.ProgressWindow.StatusText.Text = progressMessage;
+                                    }
+                                });
+                            },
+                            job.CancellationTokenSource.Token);
+
+                        if (!extractResult)
+                        {
+                            throw new Exception("Archive extraction failed or was cancelled.");
+                        }
+
+                        // After extraction, use the extracted directory as source
+                        var extractedDirs = Directory.GetDirectories(tempExtractPath);
+                        if (extractedDirs.Length == 1)
+                        {
+                            actualSourcePath = extractedDirs[0];
+                        }
+                        else
+                        {
+                            actualSourcePath = tempExtractPath;
+                        }
+                    }
+                }
+
                 // Ensure destination parent directory exists
                 var destParent = Path.GetDirectoryName(job.DestinationPath);
                 if (!Directory.Exists(destParent))
@@ -428,9 +641,17 @@ namespace FastInstall
                     Directory.CreateDirectory(destParent);
                 }
 
+                playniteAPI.MainView.UIDispatcher.Invoke(() =>
+                {
+                    if (job.ProgressWindow != null)
+                    {
+                        job.ProgressWindow.StatusText.Text = "Copying files...";
+                    }
+                });
+
                 // Copy with progress
                 var result = await FileCopyHelper.CopyDirectoryWithProgress(
-                    job.SourcePath,
+                    actualSourcePath,
                     job.DestinationPath,
                     (progress) =>
                     {
@@ -441,6 +662,20 @@ namespace FastInstall
                         });
                     },
                     job.CancellationTokenSource.Token);
+
+                // Cleanup temporary extraction directory if created
+                if (needsArchiveCleanup && !string.IsNullOrWhiteSpace(tempExtractPath) && Directory.Exists(tempExtractPath))
+                {
+                    try
+                    {
+                        Directory.Delete(tempExtractPath, true);
+                        logger.Info($"FastInstall: Cleaned up temporary extraction directory: {tempExtractPath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Warn(ex, $"FastInstall: Failed to cleanup temporary extraction directory: {tempExtractPath}");
+                    }
+                }
 
                 if (job.CancellationTokenSource.Token.IsCancellationRequested)
                 {
@@ -676,8 +911,24 @@ namespace FastInstall
                 
                 var errorMessage = GetFriendlyErrorMessage(ex);
                 
+                // Restore original game name
                 playniteAPI.MainView.UIDispatcher.Invoke(() =>
                 {
+                    try
+                    {
+                        var dbGame = playniteAPI.Database.Games.Get(job.Game.Id);
+                        if (dbGame != null)
+                        {
+                            var originalName = dbGame.Name.Replace(" [In Queue]", "").Replace(" [Downloading...]", "");
+                            if (dbGame.Name != originalName)
+                            {
+                                dbGame.Name = originalName;
+                                playniteAPI.Database.Games.Update(dbGame);
+                            }
+                        }
+                    }
+                    catch { }
+                    
                     job.ProgressWindow?.ShowError(errorMessage);
                     job.ProgressWindow?.AllowClose();
                 });
@@ -979,7 +1230,16 @@ namespace FastInstall
         /// <summary>
         /// Gets the number of jobs in the queue (excluding the one currently being processed)
         /// </summary>
-        public int QueueCount => installQueue.Count;
+        public int QueueCount
+        {
+            get
+            {
+                lock (queueLock)
+                {
+                    return installQueue.Count;
+                }
+            }
+        }
 
         /// <summary>
         /// Gets all active installation jobs (including queued and paused)
@@ -988,8 +1248,24 @@ namespace FastInstall
         {
             var allJobs = new List<InstallationJob>();
             allJobs.AddRange(activeInstallations.Values);
-            allJobs.AddRange(installQueue);
-            return allJobs.Distinct().ToList(); // Remove duplicates
+            lock (queueLock)
+            {
+                allJobs.AddRange(installQueue);
+            }
+            // Remove duplicates based on Game.Id
+            return allJobs.GroupBy(j => j.Game.Id).Select(g => g.First()).ToList();
+        }
+
+        /// <summary>
+        /// Changes the priority of an installation job
+        /// </summary>
+        public void SetJobPriority(Guid gameId, InstallationPriority priority)
+        {
+            if (activeInstallations.TryGetValue(gameId, out var job))
+            {
+                job.Priority = priority;
+                logger.Info($"FastInstall: Changed priority of '{job.Game.Name}' to {priority}");
+            }
         }
 
         /// <summary>
@@ -997,26 +1273,29 @@ namespace FastInstall
         /// </summary>
         public QueueInfo GetQueueInfo()
         {
-            return new QueueInfo
+            lock (queueLock)
             {
-                TotalActive = activeInstallations.Count,
-                Queued = installQueue.Count(j => j.Status != InstallationStatus.Paused),
-                Paused = activeInstallations.Values.Count(j => j.Status == InstallationStatus.Paused) + 
-                         installQueue.Count(j => j.Status == InstallationStatus.Paused),
-                CurrentlyInstalling = activeInstallations.Values
-                    .Where(j => j.Status == InstallationStatus.InProgress)
-                    .Select(j => j.Game.Name)
-                    .ToList(),
-                QueuedGames = installQueue
-                    .Where(j => j.Status != InstallationStatus.Paused)
-                    .Select(j => j.Game.Name)
-                    .ToList(),
-                PausedGames = activeInstallations.Values
-                    .Where(j => j.Status == InstallationStatus.Paused)
-                    .Select(j => j.Game.Name)
-                    .Concat(installQueue.Where(j => j.Status == InstallationStatus.Paused).Select(j => j.Game.Name))
-                    .ToList()
-            };
+                return new QueueInfo
+                {
+                    TotalActive = activeInstallations.Count,
+                    Queued = installQueue.Count(j => j.Status != InstallationStatus.Paused),
+                    Paused = activeInstallations.Values.Count(j => j.Status == InstallationStatus.Paused) + 
+                             installQueue.Count(j => j.Status == InstallationStatus.Paused),
+                    CurrentlyInstalling = activeInstallations.Values
+                        .Where(j => j.Status == InstallationStatus.InProgress)
+                        .Select(j => j.Game.Name)
+                        .ToList(),
+                    QueuedGames = installQueue
+                        .Where(j => j.Status != InstallationStatus.Paused)
+                        .Select(j => j.Game.Name)
+                        .ToList(),
+                    PausedGames = activeInstallations.Values
+                        .Where(j => j.Status == InstallationStatus.Paused)
+                        .Select(j => j.Game.Name)
+                        .Concat(installQueue.Where(j => j.Status == InstallationStatus.Paused).Select(j => j.Game.Name))
+                        .ToList()
+                };
+            }
         }
     }
 

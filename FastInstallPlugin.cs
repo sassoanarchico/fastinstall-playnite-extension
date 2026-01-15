@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using Playnite.SDK;
 using Playnite.SDK.Models;
 using Playnite.SDK.Plugins;
+using System.Threading.Tasks;
 
 namespace FastInstall
 {
@@ -46,7 +47,7 @@ namespace FastInstall
         private static readonly ILogger logger = LogManager.GetLogger();
         private FastInstallSettingsViewModel settingsViewModel;
 
-        public const string PluginVersion = "0.5.3";
+        public const string PluginVersion = "1.0.0";
         
         public override Guid Id { get; } = Guid.Parse("F8A1B2C3-D4E5-6789-ABCD-EF1234567890");
         public override string Name => "FastInstall";
@@ -63,8 +64,8 @@ namespace FastInstall
                 HasSettings = true
             };
             
-            // Initialize the background install manager
-            BackgroundInstallManager.Initialize(api);
+            // Initialize the background install manager with 7-Zip path getter
+            BackgroundInstallManager.Initialize(api, () => settingsViewModel.Settings?.SevenZipPath ?? string.Empty);
             
             // Apply max parallel downloads setting
             BackgroundInstallManager.Instance?.SetMaxParallelInstalls(settingsViewModel.Settings.EffectiveMaxParallelDownloads);
@@ -180,6 +181,44 @@ namespace FastInstall
                         // Check if game is already installed on SSD
                         bool isInstalled = false;
                         string installDir = null;
+                        bool isInQueue = false;
+                        bool isDownloading = false;
+
+                        // Check if game is in installation queue
+                        // Note: We can't easily match by GameId here since jobs use Playnite Game objects
+                        // So we'll check by name matching
+                        var installManager = BackgroundInstallManager.Instance;
+                        if (installManager != null)
+                        {
+                            try
+                            {
+                                var allJobs = installManager.GetAllJobs();
+                                var job = allJobs.FirstOrDefault(j => 
+                                {
+                                    try
+                                    {
+                                        var jobGame = PlayniteApi.Database.Games.Get(j.Game.Id);
+                                        return jobGame != null && 
+                                            (jobGame.Name.Replace(" [In Queue]", "").Replace(" [Downloading...]", "") == detectedGame.Name ||
+                                             j.Game.Name.Replace(" [In Queue]", "").Replace(" [Downloading...]", "") == detectedGame.Name);
+                                    }
+                                    catch { return false; }
+                                });
+                                
+                                if (job != null)
+                                {
+                                    if (job.Status == InstallationStatus.Pending)
+                                    {
+                                        isInQueue = true;
+                                    }
+                                    else if (job.Status == InstallationStatus.InProgress)
+                                    {
+                                        isDownloading = true;
+                                    }
+                                }
+                            }
+                            catch { }
+                        }
 
                         if (!string.IsNullOrWhiteSpace(config.DestinationPath))
                         {
@@ -198,10 +237,21 @@ namespace FastInstall
                             platformName = config.Platform;
                         }
 
+                        // Add status suffix to name if in queue or downloading
+                        string displayName = detectedGame.Name;
+                        if (isDownloading)
+                        {
+                            displayName = $"{detectedGame.Name} [Downloading...]";
+                        }
+                        else if (isInQueue)
+                        {
+                            displayName = $"{detectedGame.Name} [In Queue]";
+                        }
+
                         var game = new GameMetadata
                         {
                             GameId = gameId,
-                            Name = detectedGame.Name,
+                            Name = displayName,
                             IsInstalled = isInstalled,
                             InstallDirectory = installDir,
                             Source = new MetadataNameProperty("FastInstall Archive"),

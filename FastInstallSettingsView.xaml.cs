@@ -1,13 +1,30 @@
-using System.Windows.Controls;
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
+using Playnite.SDK;
 
 namespace FastInstall
 {
     public partial class FastInstallSettingsView : UserControl
     {
+        private static readonly ILogger logger = LogManager.GetLogger();
+
         public FastInstallSettingsView()
         {
             InitializeComponent();
+            Loaded += FastInstallSettingsView_Loaded;
+        }
+
+        private void FastInstallSettingsView_Loaded(object sender, RoutedEventArgs e)
+        {
+            // Populate ConflictResolution ComboBox
+            if (ConflictResolutionComboBox != null)
+            {
+                ConflictResolutionComboBox.ItemsSource = Enum.GetValues(typeof(ConflictResolution)).Cast<ConflictResolution>();
+            }
         }
 
         private void EnableParallelCheckBox_Checked(object sender, RoutedEventArgs e)
@@ -77,6 +94,44 @@ namespace FastInstall
         {
             var window = new DownloadManagerWindow();
             window.Show();
+        }
+
+        private void BrowseSevenZipButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is FastInstallSettingsViewModel viewModel)
+            {
+                if (viewModel.plugin?.PlayniteApi != null)
+                {
+                    var selectedFile = viewModel.plugin.PlayniteApi.Dialogs.SelectFile("7-Zip Executable|7z.exe;7za.exe;7zFM.exe|All Files|*.*");
+                    if (!string.IsNullOrEmpty(selectedFile) && File.Exists(selectedFile))
+                    {
+                        viewModel.Settings.SevenZipPath = selectedFile;
+                    }
+                }
+            }
+        }
+
+        private void DownloadSevenZipButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Open 7-Zip download page in default browser
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "https://www.7-zip.org/download.html",
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "FastInstall: Error opening 7-Zip download page");
+                if (DataContext is FastInstallSettingsViewModel viewModel)
+                {
+                    viewModel.plugin?.PlayniteApi?.Dialogs.ShowErrorMessage(
+                        $"Error opening browser:\n{ex.Message}\n\nPlease visit: https://www.7-zip.org/download.html",
+                        "FastInstall - Download 7-Zip");
+                }
+            }
         }
     }
 }
