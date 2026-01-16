@@ -133,6 +133,62 @@ namespace FastInstall
                 }
             }
         }
+
+        private void ShowApiKeyHelpButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is FastInstallSettingsViewModel viewModel)
+            {
+                var message = @"How to get a Google Drive API Key:
+
+1. Go to Google Cloud Console:
+   https://console.cloud.google.com/
+
+2. Create a new project (or select an existing one)
+
+3. Enable the Google Drive API:
+   - Go to 'APIs & Services' → 'Library'
+   - Search for 'Google Drive API'
+   - Click 'Enable'
+
+4. Create credentials:
+   - Go to 'APIs & Services' → 'Credentials'
+   - Click 'Create Credentials' → 'API Key'
+   - Copy the generated API key
+
+5. (Optional) Restrict the API key:
+   - Click on the API key to edit it
+   - Under 'API restrictions', select 'Google Drive API'
+   - This improves security
+
+Note: The API key is FREE and doesn't require billing.
+It's only needed for listing shared folder contents.
+Direct file links work without an API key.
+
+Do you want to open Google Cloud Console now?";
+
+                var result = viewModel.plugin?.PlayniteApi?.Dialogs.ShowMessage(
+                    message,
+                    "How to get a Google Drive API Key",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Information);
+
+                if (result == System.Windows.MessageBoxResult.Yes)
+                {
+                    try
+                    {
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "https://console.cloud.google.com/apis/credentials",
+                            UseShellExecute = true
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Error(ex, "FastInstall: Error opening Google Cloud Console");
+                    }
+                }
+            }
+        }
     }
 }
 

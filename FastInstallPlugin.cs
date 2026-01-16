@@ -27,6 +27,7 @@ namespace FastInstall
         Wii,        // Nintendo Wii (Dolphin)
         GameCube,   // Nintendo GameCube (Dolphin)
         Xbox360,    // Xbox 360 (Xenia)
+        NDS,        // Nintendo DS (MelonDS/DeSmuME)
         PC          // PC Game
     }
 
@@ -47,7 +48,7 @@ namespace FastInstall
         private static readonly ILogger logger = LogManager.GetLogger();
         private FastInstallSettingsViewModel settingsViewModel;
 
-        public const string PluginVersion = "1.0.0";
+        public const string PluginVersion = "1.1.0";
         
         public override Guid Id { get; } = Guid.Parse("F8A1B2C3-D4E5-6789-ABCD-EF1234567890");
         public override string Name => "FastInstall";
@@ -69,6 +70,16 @@ namespace FastInstall
             
             // Apply max parallel downloads setting
             BackgroundInstallManager.Instance?.SetMaxParallelInstalls(settingsViewModel.Settings.EffectiveMaxParallelDownloads);
+
+            // Initialize cloud download manager
+            CloudDownloadManager.Initialize(api, settingsViewModel.Settings.EffectiveMaxParallelDownloads, 
+                () => settingsViewModel.Settings?.SevenZipPath ?? string.Empty);
+
+            // Configure Google Drive API key if available
+            if (!string.IsNullOrWhiteSpace(settingsViewModel.Settings?.GoogleDriveApiKey))
+            {
+                CloudDownloadManager.Instance?.SetProviderApiKey(CloudProvider.GoogleDrive, settingsViewModel.Settings.GoogleDriveApiKey);
+            }
         }
         
         /// <summary>
@@ -131,20 +142,17 @@ namespace FastInstall
         {
             // Clean up any problematic GameActions from previously imported games
             CleanupProblematicGameActions();
-            
+
             var games = new List<GameMetadata>();
 
-            // Check if we have any enabled configurations
-            var enabledConfigs = Settings?.FolderConfigurations?.Where(c => c.IsEnabled).ToList();
-            
-            if (enabledConfigs == null || enabledConfigs.Count == 0)
+            // Check if we have any enabled configurations (local or cloud)
+            var enabledConfigs = Settings?.FolderConfigurations?.Where(c => c.IsEnabled).ToList() ?? new List<FolderConfiguration>();
+            var enabledCloudSources = Settings?.CloudSources?.Where(c => c.IsEnabled).ToList() ?? new List<CloudSourceConfiguration>();
+
+            if (enabledConfigs.Count == 0 && enabledCloudSources.Count == 0)
             {
-                logger.Warn("FastInstall: No enabled folder configurations found.");
-                PlayniteApi.Notifications.Add(new NotificationMessage(
-                    "FastInstall_NoConfig",
-                    "FastInstall: Please configure at least one enabled folder pair in settings.",
-                    NotificationType.Error,
-                    () => PlayniteApi.MainView.OpenPluginSettings(Id)));
+                logger.Info("FastInstall: No enabled configurations found (local or cloud).");
+                // Don't show error - user might just not have configured anything yet
                 return games;
             }
 
@@ -225,7 +233,170 @@ namespace FastInstall
                 }
             }
 
+            // Add cloud sources
+            var cloudGames = GetCloudGames();
+            games.AddRange(cloudGames);
+
             return games;
+        }
+
+        /// <summary>
+        /// Gets games from cloud sources (Google Drive, etc.)
+        /// </summary>
+        private List<GameMetadata> GetCloudGames()
+        {
+            var cloudGames = new List<GameMetadata>();
+
+            var enabledCloudSources = Settings?.CloudSources?.Where(c => c.IsEnabled).ToList();
+            if (enabledCloudSources == null || enabledCloudSources.Count == 0)
+            {
+                return cloudGames;
+            }
+
+            foreach (var cloudSource in enabledCloudSources)
+            {
+                if (string.IsNullOrWhiteSpace(cloudSource.CloudLink))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var provider = CloudDownloadManager.Instance?.GetProvider(cloudSource.Provider);
+                    if (provider == null)
+                    {
+                        logger.Warn($"FastInstall: Cloud provider {cloudSource.Provider} not available");
+                        continue;
+                    }
+
+                    // Parse the link
+                    var parseResult = provider.ParseLink(cloudSource.CloudLink);
+                    if (!parseResult.IsValid)
+                    {
+                        logger.Warn($"FastInstall: Invalid cloud link: {parseResult.ErrorMessage}");
+                        continue;
+                    }
+
+                    cloudSource.ParsedFileId = parseResult.FileId;
+
+                    if (parseResult.IsFolder && cloudSource.LinkType == CloudLinkType.SharedFolder)
+                    {
+                        // List files in the folder
+                        var files = provider.ListFilesAsync(parseResult.FileId).GetAwaiter().GetResult();
+                        foreach (var file in files.Where(f => !f.IsFolder))
+                        {
+                            var gameName = GetGameNameFromFileName(file.Name);
+                            var gameId = GenerateCloudGameId(cloudSource.Provider, file.Id, gameName);
+
+                            cloudGames.Add(new GameMetadata
+                            {
+                                GameId = gameId,
+                                Name = $"{gameName} [Cloud]",
+                                IsInstalled = false,
+                                Source = new MetadataNameProperty("FastInstall Cloud"),
+                                Platforms = new HashSet<MetadataProperty> { new MetadataNameProperty(cloudSource.Platform ?? "PC") }
+                            });
+                        }
+                    }
+                    else
+                    {
+                        // Single file/direct link
+                        var displayName = !string.IsNullOrWhiteSpace(cloudSource.DisplayName) 
+                            ? cloudSource.DisplayName 
+                            : $"Cloud Game ({parseResult.FileId.Substring(0, Math.Min(8, parseResult.FileId.Length))}...)";
+
+                        var gameId = GenerateCloudGameId(cloudSource.Provider, parseResult.FileId, displayName);
+
+                        cloudGames.Add(new GameMetadata
+                        {
+                            GameId = gameId,
+                            Name = $"{displayName} [Cloud]",
+                            IsInstalled = false,
+                            Source = new MetadataNameProperty("FastInstall Cloud"),
+                            Platforms = new HashSet<MetadataProperty> { new MetadataNameProperty(cloudSource.Platform ?? "PC") }
+                        });
+                    }
+
+                    logger.Info($"FastInstall: Processed cloud source: {cloudSource.DisplayName ?? cloudSource.CloudLink}");
+                }
+                catch (Exception ex)
+                {
+                    logger.Error(ex, $"FastInstall: Error processing cloud source: {cloudSource.CloudLink}");
+                }
+            }
+
+            return cloudGames;
+        }
+
+        /// <summary>
+        /// Generates a stable game ID for cloud games
+        /// The format includes the file ID so we can extract it later for downloads
+        /// Uses | as separator because Google Drive file IDs can contain underscores
+        /// </summary>
+        private string GenerateCloudGameId(CloudProvider provider, string fileId, string gameName)
+        {
+            // Include the actual file ID in the game ID so we can extract it for downloads
+            // Format: fastinstall_cloud|{provider}|{fileId}|{hash}
+            // Using | as separator because Google Drive file IDs can contain _ and -
+            var nameHash = GetStableHash(gameName.ToLowerInvariant());
+            return $"fastinstall_cloud|{(int)provider}|{fileId}|{nameHash}";
+        }
+        
+        /// <summary>
+        /// Extracts the file ID from a cloud game's GameId
+        /// </summary>
+        public string ExtractFileIdFromGameId(string gameId)
+        {
+            if (string.IsNullOrWhiteSpace(gameId))
+                return null;
+            
+            // New format: fastinstall_cloud|{provider}|{fileId}|{hash}
+            if (gameId.StartsWith("fastinstall_cloud|"))
+            {
+                var parts = gameId.Split('|');
+                if (parts.Length >= 3)
+                {
+                    // parts[0] = "fastinstall_cloud"
+                    // parts[1] = provider (0, 1, etc.)
+                    // parts[2] = fileId (the actual Google Drive file ID)
+                    // parts[3] = hash (optional)
+                    return parts[2];
+                }
+            }
+            
+            // Legacy format: fastinstall_cloud_{provider}_{fileId}_{hash}
+            // This won't work well if fileId contains underscores, but try anyway
+            if (gameId.StartsWith("fastinstall_cloud_"))
+            {
+                var parts = gameId.Split('_');
+                if (parts.Length >= 4)
+                {
+                    return parts[3];
+                }
+            }
+            
+            return null;
+        }
+
+        /// <summary>
+        /// Extracts game name from a file name (removes extension and common suffixes)
+        /// </summary>
+        private string GetGameNameFromFileName(string fileName)
+        {
+            // Remove extension
+            var name = Path.GetFileNameWithoutExtension(fileName);
+
+            // Remove common archive extensions if double extension
+            var archiveExts = new[] { ".zip", ".7z", ".rar" };
+            foreach (var ext in archiveExts)
+            {
+                if (name.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+                {
+                    name = name.Substring(0, name.Length - ext.Length);
+                }
+            }
+
+            return name;
         }
 
         /// <summary>
@@ -343,6 +514,17 @@ namespace FastInstall
                 return info;
             }
 
+            // Check for Nintendo DS game (.nds files)
+            var ndsFiles = GetFilesWithExtensions(folderPath, new[] { ".nds", ".dsi" });
+            if (ndsFiles.Count > 0)
+            {
+                info.GameType = GameType.NDS;
+                info.PlatformName = "Nintendo DS";
+                info.ExecutablePath = ndsFiles[0];
+                logger.Debug($"FastInstall: Detected Nintendo DS game '{gameName}'");
+                return info;
+            }
+
             // Check for PC game (.exe files)
             var exeFiles = GetFilesWithExtensions(folderPath, new[] { ".exe" });
             if (exeFiles.Count > 0)
@@ -456,7 +638,15 @@ namespace FastInstall
                 yield break;
             }
 
-            yield return new FastInstallController(args.Game, this);
+            // Check if this is a cloud game
+            if (IsCloudGame(args.Game))
+            {
+                yield return new CloudInstallController(args.Game, this);
+            }
+            else
+            {
+                yield return new FastInstallController(args.Game, this);
+            }
         }
 
         public override IEnumerable<UninstallController> GetUninstallActions(GetUninstallActionsArgs args)
@@ -1052,6 +1242,95 @@ namespace FastInstall
             // Fallback: try to find RPCS3 for PS3 games if not set
             var emulators = PlayniteApi.Database.Emulators;
             return emulators?.FirstOrDefault(e => e.Name != null && e.Name.IndexOf("rpcs3", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        /// <summary>
+        /// Checks if a game is a cloud game (from Google Drive, etc.)
+        /// </summary>
+        public bool IsCloudGame(Game game)
+        {
+            if (game == null || string.IsNullOrWhiteSpace(game.GameId))
+                return false;
+
+            // Check both new format (with |) and legacy format (with _)
+            return game.GameId.StartsWith("fastinstall_cloud|", StringComparison.OrdinalIgnoreCase) ||
+                   game.GameId.StartsWith("fastinstall_cloud_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Gets the cloud source configuration for a cloud game
+        /// </summary>
+        public CloudSourceConfiguration GetCloudSourceConfiguration(Game game)
+        {
+            if (!IsCloudGame(game))
+                return null;
+
+            if (Settings?.CloudSources == null)
+                return null;
+
+            // Try to find the cloud source that matches this game
+            foreach (var cloudSource in Settings.CloudSources.Where(c => c.IsEnabled))
+            {
+                if (string.IsNullOrWhiteSpace(cloudSource.CloudLink))
+                    continue;
+
+                var provider = CloudDownloadManager.Instance?.GetProvider(cloudSource.Provider);
+                if (provider == null)
+                    continue;
+
+                var parseResult = provider.ParseLink(cloudSource.CloudLink);
+                if (!parseResult.IsValid)
+                    continue;
+
+                // Check if this cloud source's game ID matches
+                if (parseResult.IsFolder && cloudSource.LinkType == CloudLinkType.SharedFolder)
+                {
+                    // For folder sources, we need to check if the game came from this folder
+                    // The game ID contains the file ID, so we can't directly match here
+                    // Return the first matching folder source for now
+                    if (game.Name.Contains("[Cloud]"))
+                    {
+                        return cloudSource;
+                    }
+                }
+                else
+                {
+                    // For direct file sources, check if the game ID matches
+                    var displayName = !string.IsNullOrWhiteSpace(cloudSource.DisplayName)
+                        ? cloudSource.DisplayName
+                        : $"Cloud Game ({parseResult.FileId.Substring(0, Math.Min(8, parseResult.FileId.Length))}...)";
+
+                    var expectedGameId = GenerateCloudGameId(cloudSource.Provider, parseResult.FileId, displayName);
+                    if (game.GameId == expectedGameId)
+                    {
+                        return cloudSource;
+                    }
+                }
+            }
+
+            // Fallback: return the first enabled cloud source
+            return Settings.CloudSources.FirstOrDefault(c => c.IsEnabled);
+        }
+
+        /// <summary>
+        /// Gets the cloud file ID from a game's ID
+        /// </summary>
+        public string GetCloudFileId(Game game)
+        {
+            if (!IsCloudGame(game))
+                return null;
+
+            // Find the matching cloud source
+            var cloudSource = GetCloudSourceConfiguration(game);
+            if (cloudSource == null)
+                return null;
+
+            var provider = CloudDownloadManager.Instance?.GetProvider(cloudSource.Provider);
+            if (provider == null)
+                return null;
+
+            var parseResult = provider.ParseLink(cloudSource.CloudLink);
+            return parseResult.IsValid ? parseResult.FileId : null;
         }
     }
 }

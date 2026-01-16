@@ -196,13 +196,121 @@ namespace FastInstall
         Skip        // Skip installation if exists
     }
 
+    /// <summary>
+    /// Type of cloud source link
+    /// </summary>
+    public enum CloudLinkType
+    {
+        DirectFile,     // Direct link to a single file
+        SharedFolder    // Link to a shared folder (lists contents)
+    }
+
+    /// <summary>
+    /// Configuration for a cloud storage source
+    /// </summary>
+    public class CloudSourceConfiguration : ObservableObject
+    {
+        private bool isEnabled = true;
+        private CloudProvider provider = CloudProvider.GoogleDrive;
+        private CloudLinkType linkType = CloudLinkType.DirectFile;
+        private string cloudLink = string.Empty;
+        private string displayName = string.Empty;
+        private string destinationPath = string.Empty;
+        private string platform = "PC";
+        private Guid? emulatorId = null;
+        private string emulatorProfileId = null;
+
+        public bool IsEnabled
+        {
+            get => isEnabled;
+            set => SetValue(ref isEnabled, value);
+        }
+
+        public CloudProvider Provider
+        {
+            get => provider;
+            set => SetValue(ref provider, value);
+        }
+
+        public CloudLinkType LinkType
+        {
+            get => linkType;
+            set => SetValue(ref linkType, value);
+        }
+
+        /// <summary>
+        /// The Google Drive/Dropbox link (file or folder)
+        /// </summary>
+        public string CloudLink
+        {
+            get => cloudLink;
+            set => SetValue(ref cloudLink, value);
+        }
+
+        /// <summary>
+        /// User-friendly name for this cloud source
+        /// </summary>
+        public string DisplayName
+        {
+            get => displayName;
+            set => SetValue(ref displayName, value);
+        }
+
+        /// <summary>
+        /// Where to install games from this source
+        /// </summary>
+        public string DestinationPath
+        {
+            get => destinationPath;
+            set => SetValue(ref destinationPath, value);
+        }
+
+        public string Platform
+        {
+            get => platform;
+            set => SetValue(ref platform, value);
+        }
+
+        public Guid? EmulatorId
+        {
+            get => emulatorId;
+            set => SetValue(ref emulatorId, value);
+        }
+
+        public string EmulatorProfileId
+        {
+            get => emulatorProfileId;
+            set => SetValue(ref emulatorProfileId, value);
+        }
+
+        /// <summary>
+        /// Parsed file/folder ID from the cloud link
+        /// </summary>
+        [DontSerialize]
+        public string ParsedFileId { get; set; }
+
+        /// <summary>
+        /// Whether the link has been validated
+        /// </summary>
+        [DontSerialize]
+        public bool IsValidated { get; set; }
+
+        /// <summary>
+        /// Reference to ViewModel for profile filtering
+        /// </summary>
+        [DontSerialize]
+        public FastInstallSettingsViewModel ViewModel { get; set; }
+    }
+
     public class FastInstallSettings : ObservableObject
     {
         private ObservableCollection<FolderConfiguration> folderConfigurations = new ObservableCollection<FolderConfiguration>();
+        private ObservableCollection<CloudSourceConfiguration> cloudSources = new ObservableCollection<CloudSourceConfiguration>();
         private bool enableParallelDownloads = false;
         private int maxParallelDownloads = 2;
         private ConflictResolution conflictResolution = ConflictResolution.Ask;
         private string sevenZipPath = string.Empty;
+        private string googleDriveApiKey = string.Empty;
 
         // Legacy settings - kept for backward compatibility
         private string sourceArchiveDirectory = string.Empty;
@@ -213,6 +321,25 @@ namespace FastInstall
         {
             get => folderConfigurations;
             set => SetValue(ref folderConfigurations, value);
+        }
+
+        /// <summary>
+        /// Cloud storage sources (Google Drive, Dropbox, etc.)
+        /// </summary>
+        public ObservableCollection<CloudSourceConfiguration> CloudSources
+        {
+            get => cloudSources;
+            set => SetValue(ref cloudSources, value);
+        }
+
+        /// <summary>
+        /// Google Drive API Key for listing shared folder contents
+        /// Not required for direct file downloads
+        /// </summary>
+        public string GoogleDriveApiKey
+        {
+            get => googleDriveApiKey;
+            set => SetValue(ref googleDriveApiKey, value);
         }
 
         /// <summary>
@@ -359,6 +486,8 @@ namespace FastInstall
         private FastInstallSettings settings;
         private ObservableCollection<FolderConfiguration> editingConfigurations;
         private FolderConfiguration selectedConfiguration;
+        private ObservableCollection<CloudSourceConfiguration> editingCloudSources;
+        private CloudSourceConfiguration selectedCloudSource;
 
         /// <summary>
         /// Version shown in the Settings UI.
@@ -391,12 +520,13 @@ namespace FastInstall
         {
             "PC",
             "Sony PlayStation 3",
-            "Sony PlayStation 2", 
+            "Sony PlayStation 2",
             "Sony PSP",
             "Nintendo Switch",
             "Nintendo Wii U",
             "Nintendo Wii",
             "Nintendo GameCube",
+            "Nintendo DS",
             "Microsoft Xbox 360"
         };
 
@@ -411,6 +541,10 @@ namespace FastInstall
         private RelayCommand<object> removeConfigurationCommand;
         private RelayCommand<FolderConfiguration> browseSourceCommand;
         private RelayCommand<FolderConfiguration> browseDestinationCommand;
+        private RelayCommand<object> addCloudSourceCommand;
+        private RelayCommand<object> removeCloudSourceCommand;
+        private RelayCommand<CloudSourceConfiguration> browseCloudDestinationCommand;
+        private RelayCommand<CloudSourceConfiguration> testCloudConnectionCommand;
 
         public FastInstallSettings Settings
         {
@@ -441,6 +575,30 @@ namespace FastInstall
                 OnPropertyChanged();
             }
         }
+
+        public ObservableCollection<CloudSourceConfiguration> EditingCloudSources
+        {
+            get => editingCloudSources;
+            set
+            {
+                editingCloudSources = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public CloudSourceConfiguration SelectedCloudSource
+        {
+            get => selectedCloudSource;
+            set
+            {
+                selectedCloudSource = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public List<string> AvailableCloudProviders => new List<string> { "Google Drive" };
+
+        public List<string> AvailableCloudLinkTypes => new List<string> { "Direct File", "Shared Folder" };
 
         public List<string> AvailablePlatforms => availablePlatforms;
 
@@ -591,6 +749,15 @@ namespace FastInstall
                 config.ViewModel = this;
             }
 
+            // Cloud sources
+            EditingCloudSources = new ObservableCollection<CloudSourceConfiguration>(
+                Settings.CloudSources.Select(c => Serialization.GetClone(c))
+            );
+            foreach (var cloudConfig in EditingCloudSources)
+            {
+                cloudConfig.ViewModel = this;
+            }
+
             // Refresh emulators list in case user added/removed emulators
             LoadAvailableEmulators();
             
@@ -599,6 +766,13 @@ namespace FastInstall
             
             // Update 7-Zip path getter
             BackgroundInstallManager.Instance?.SetSevenZipPathGetter(() => Settings.SevenZipPath ?? string.Empty);
+
+            // Configure Google Drive API key
+            var gdProvider = CloudDownloadManager.Instance?.GetProvider(CloudProvider.GoogleDrive);
+            if (gdProvider != null && !string.IsNullOrWhiteSpace(Settings.GoogleDriveApiKey))
+            {
+                gdProvider.SetApiKey(Settings.GoogleDriveApiKey);
+            }
         }
 
         public void CancelEdit()
@@ -606,6 +780,7 @@ namespace FastInstall
             // Restore original values
             Settings = editingClone;
             EditingConfigurations = null;
+            EditingCloudSources = null;
         }
 
         public void EndEdit()
@@ -620,11 +795,28 @@ namespace FastInstall
                 }
             }
 
+            // Copy cloud sources back to settings
+            if (EditingCloudSources != null)
+            {
+                Settings.CloudSources.Clear();
+                foreach (var cloudConfig in EditingCloudSources)
+                {
+                    Settings.CloudSources.Add(cloudConfig);
+                }
+            }
+
             // Apply max parallel downloads setting
             BackgroundInstallManager.Instance?.SetMaxParallelInstalls(Settings.EffectiveMaxParallelDownloads);
             
             // Update 7-Zip path getter
             BackgroundInstallManager.Instance?.SetSevenZipPathGetter(() => Settings.SevenZipPath ?? string.Empty);
+
+            // Configure Google Drive API key
+            var gdProvider = CloudDownloadManager.Instance?.GetProvider(CloudProvider.GoogleDrive);
+            if (gdProvider != null && !string.IsNullOrWhiteSpace(Settings.GoogleDriveApiKey))
+            {
+                gdProvider.SetApiKey(Settings.GoogleDriveApiKey);
+            }
 
             // Save settings
             plugin.SavePluginSettings(Settings);
@@ -634,24 +826,13 @@ namespace FastInstall
         {
             errors = new List<string>();
 
-            if (Settings.FolderConfigurations.Count == 0)
-            {
-                errors.Add("At least one folder configuration is required.");
-                return false;
-            }
-
+            // Validate enabled local configurations (if any)
             var enabledConfigs = Settings.FolderConfigurations.Where(c => c.IsEnabled).ToList();
-            if (enabledConfigs.Count == 0)
-            {
-                errors.Add("At least one folder configuration must be enabled.");
-                return false;
-            }
-
             foreach (var config in enabledConfigs)
             {
                 if (string.IsNullOrWhiteSpace(config.SourcePath))
                 {
-                    errors.Add("All enabled configurations must have a source path.");
+                    errors.Add("Enabled local configurations must have a source path.");
                 }
                 else if (!System.IO.Directory.Exists(config.SourcePath))
                 {
@@ -660,7 +841,21 @@ namespace FastInstall
 
                 if (string.IsNullOrWhiteSpace(config.DestinationPath))
                 {
-                    errors.Add("All enabled configurations must have a destination path.");
+                    errors.Add("Enabled local configurations must have a destination path.");
+                }
+            }
+
+            // Validate enabled cloud configurations (if any)
+            var enabledCloudSources = Settings.CloudSources.Where(c => c.IsEnabled).ToList();
+            foreach (var cloudSource in enabledCloudSources)
+            {
+                if (string.IsNullOrWhiteSpace(cloudSource.CloudLink))
+                {
+                    errors.Add("Enabled cloud sources must have a Google Drive link.");
+                }
+                if (string.IsNullOrWhiteSpace(cloudSource.DestinationPath))
+                {
+                    errors.Add("Enabled cloud sources must have a destination path.");
                 }
             }
 
@@ -746,6 +941,239 @@ namespace FastInstall
                     });
                 }
                 return browseDestinationCommand;
+            }
+        }
+
+        // Cloud source commands
+        public RelayCommand<object> AddCloudSourceCommand
+        {
+            get
+            {
+                if (addCloudSourceCommand == null)
+                {
+                    addCloudSourceCommand = new RelayCommand<object>((a) =>
+                    {
+                        var newSource = new CloudSourceConfiguration
+                        {
+                            IsEnabled = true,
+                            Provider = CloudProvider.GoogleDrive,
+                            LinkType = CloudLinkType.DirectFile,
+                            Platform = "PC",
+                            ViewModel = this
+                        };
+                        EditingCloudSources.Add(newSource);
+                        SelectedCloudSource = newSource;
+                    });
+                }
+                return addCloudSourceCommand;
+            }
+        }
+
+        public RelayCommand<object> RemoveCloudSourceCommand
+        {
+            get
+            {
+                if (removeCloudSourceCommand == null)
+                {
+                    removeCloudSourceCommand = new RelayCommand<object>(
+                        (a) =>
+                        {
+                            if (SelectedCloudSource != null)
+                            {
+                                EditingCloudSources.Remove(SelectedCloudSource);
+                            }
+                        },
+                        (a) => SelectedCloudSource != null
+                    );
+                }
+                return removeCloudSourceCommand;
+            }
+        }
+
+        public RelayCommand<CloudSourceConfiguration> BrowseCloudDestinationCommand
+        {
+            get
+            {
+                if (browseCloudDestinationCommand == null)
+                {
+                    browseCloudDestinationCommand = new RelayCommand<CloudSourceConfiguration>((config) =>
+                    {
+                        var selectedFolder = plugin.PlayniteApi.Dialogs.SelectFolder();
+                        if (!string.IsNullOrEmpty(selectedFolder) && config != null)
+                        {
+                            config.DestinationPath = selectedFolder;
+                        }
+                    });
+                }
+                return browseCloudDestinationCommand;
+            }
+        }
+
+        public RelayCommand<CloudSourceConfiguration> TestCloudConnectionCommand
+        {
+            get
+            {
+                if (testCloudConnectionCommand == null)
+                {
+                    testCloudConnectionCommand = new RelayCommand<CloudSourceConfiguration>(async (config) =>
+                    {
+                        if (config == null || string.IsNullOrWhiteSpace(config.CloudLink))
+                        {
+                            plugin.PlayniteApi.Dialogs.ShowMessage("Please enter a cloud link first.", "Test Connection");
+                            return;
+                        }
+
+                        var provider = CloudDownloadManager.Instance?.GetProvider(config.Provider);
+                        if (provider == null)
+                        {
+                            plugin.PlayniteApi.Dialogs.ShowMessage(
+                                "Cloud provider not available.\n\n" +
+                                "Make sure you have restarted Playnite after installing the extension.",
+                                "Test Connection");
+                            return;
+                        }
+
+                        // Set API key if available
+                        if (!string.IsNullOrWhiteSpace(Settings.GoogleDriveApiKey))
+                        {
+                            provider.SetApiKey(Settings.GoogleDriveApiKey);
+                        }
+
+                        // Parse the link
+                        var parseResult = provider.ParseLink(config.CloudLink);
+                        if (!parseResult.IsValid)
+                        {
+                            plugin.PlayniteApi.Dialogs.ShowMessage(
+                                $"Invalid link format.\n\n{parseResult.ErrorMessage}\n\n" +
+                                "Supported formats:\n" +
+                                "• https://drive.google.com/file/d/FILE_ID/view\n" +
+                                "• https://drive.google.com/drive/folders/FOLDER_ID\n" +
+                                "• https://drive.google.com/open?id=FILE_ID", 
+                                "Invalid Link");
+                            return;
+                        }
+
+                        config.ParsedFileId = parseResult.FileId;
+
+                        try
+                        {
+                            // Check if it's a folder and we have an API key
+                            if (parseResult.IsFolder || config.LinkType == CloudLinkType.SharedFolder)
+                            {
+                                config.LinkType = CloudLinkType.SharedFolder;
+
+                                if (string.IsNullOrWhiteSpace(Settings.GoogleDriveApiKey))
+                                {
+                                    plugin.PlayniteApi.Dialogs.ShowMessage(
+                                        "This appears to be a folder link.\n\n" +
+                                        "To list folder contents, you need to configure a Google Drive API Key.\n\n" +
+                                        "Go to the 'How to get an API Key' button for instructions.",
+                                        "API Key Required");
+                                    return;
+                                }
+
+                                // List folder contents
+                                var files = await provider.ListFilesAsync(parseResult.FileId);
+                                
+                                if (files == null || files.Count == 0)
+                                {
+                                    plugin.PlayniteApi.Dialogs.ShowMessage(
+                                        "Folder is empty or could not be accessed.\n\n" +
+                                        "Make sure:\n" +
+                                        "• The folder is shared publicly (Anyone with the link)\n" +
+                                        "• The API key is valid and has Google Drive API enabled",
+                                        "No Files Found");
+                                    return;
+                                }
+
+                                // Build content list
+                                var contentList = new System.Text.StringBuilder();
+                                contentList.AppendLine($"Found {files.Count} items in folder:\n");
+                                
+                                int count = 0;
+                                long totalSize = 0;
+                                foreach (var file in files.OrderBy(f => f.Name))
+                                {
+                                    if (count < 20) // Show max 20 items
+                                    {
+                                        var icon = file.IsFolder ? "📁" : "📄";
+                                        var sizeText = file.IsFolder ? "" : $" ({file.SizeFormatted})";
+                                        contentList.AppendLine($"{icon} {file.Name}{sizeText}");
+                                    }
+                                    count++;
+                                    if (!file.IsFolder) totalSize += file.Size;
+                                }
+                                
+                                if (count > 20)
+                                {
+                                    contentList.AppendLine($"\n... and {count - 20} more items");
+                                }
+
+                                // Format total size
+                                string totalFormatted;
+                                if (totalSize < 1024) totalFormatted = $"{totalSize} B";
+                                else if (totalSize < 1024 * 1024) totalFormatted = $"{totalSize / 1024.0:F1} KB";
+                                else if (totalSize < 1024 * 1024 * 1024) totalFormatted = $"{totalSize / (1024.0 * 1024.0):F1} MB";
+                                else totalFormatted = $"{totalSize / (1024.0 * 1024.0 * 1024.0):F2} GB";
+
+                                contentList.AppendLine($"\nTotal size: {totalFormatted}");
+
+                                plugin.PlayniteApi.Dialogs.ShowMessage(contentList.ToString(), "Folder Contents");
+                                config.IsValidated = true;
+                                
+                                if (string.IsNullOrWhiteSpace(config.DisplayName))
+                                {
+                                    config.DisplayName = $"Google Drive Folder ({files.Count} items)";
+                                }
+                            }
+                            else
+                            {
+                                // It's a direct file link
+                                config.LinkType = CloudLinkType.DirectFile;
+                                
+                                var fileInfo = await provider.GetFileInfoAsync(parseResult.FileId);
+                                if (fileInfo != null)
+                                {
+                                    var message = $"✅ File found!\n\n" +
+                                        $"Name: {fileInfo.Name}\n" +
+                                        $"Size: {fileInfo.SizeFormatted}\n" +
+                                        $"Type: {(fileInfo.MimeType ?? "Unknown")}\n\n" +
+                                        "This file can be downloaded without an API key.";
+                                    
+                                    plugin.PlayniteApi.Dialogs.ShowMessage(message, "Connection Successful");
+                                    config.IsValidated = true;
+                                    
+                                    if (string.IsNullOrWhiteSpace(config.DisplayName))
+                                    {
+                                        config.DisplayName = System.IO.Path.GetFileNameWithoutExtension(fileInfo.Name);
+                                    }
+                                }
+                                else
+                                {
+                                    // Can't get file info without API key, but download might still work
+                                    plugin.PlayniteApi.Dialogs.ShowMessage(
+                                        "Link parsed successfully.\n\n" +
+                                        $"File ID: {parseResult.FileId}\n\n" +
+                                        "Note: Could not get file details (API key not set or file is private).\n" +
+                                        "The download might still work if the file is publicly shared.",
+                                        "Link Valid");
+                                    config.IsValidated = true;
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            plugin.PlayniteApi.Dialogs.ShowMessage(
+                                $"Error testing connection:\n\n{ex.Message}\n\n" +
+                                "Make sure:\n" +
+                                "• The link is publicly shared\n" +
+                                "• The API key is correct (if using folders)\n" +
+                                "• You have internet connection",
+                                "Test Failed");
+                        }
+                    });
+                }
+                return testCloudConnectionCommand;
             }
         }
     }

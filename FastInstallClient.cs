@@ -119,6 +119,175 @@ namespace FastInstall
         }
     }
 
+    /// <summary>
+    /// Install controller for cloud games (Google Drive, etc.)
+    /// </summary>
+    public class CloudInstallController : InstallController
+    {
+        private static readonly ILogger logger = LogManager.GetLogger();
+        private readonly FastInstallPlugin plugin;
+
+        public CloudInstallController(Game game, FastInstallPlugin plugin) : base(game)
+        {
+            this.plugin = plugin;
+            Name = "Download from Cloud";
+        }
+
+        public override void Install(InstallActionArgs args)
+        {
+            // Get cloud source configuration
+            var cloudSource = plugin.GetCloudSourceConfiguration(Game);
+            if (cloudSource == null)
+            {
+                plugin.PlayniteApi.Dialogs.ShowErrorMessage(
+                    "Cloud source configuration not found.\nPlease check FastInstall settings.",
+                    "FastInstall Error");
+                return;
+            }
+
+            var destinationPath = cloudSource.DestinationPath;
+            if (string.IsNullOrWhiteSpace(destinationPath))
+            {
+                plugin.PlayniteApi.Dialogs.ShowErrorMessage(
+                    "Destination path is not configured for this cloud source.\nPlease check FastInstall settings.",
+                    "FastInstall Error");
+                return;
+            }
+
+            // Get the file ID - first try to extract from game ID (for folder sources)
+            var provider = CloudDownloadManager.Instance?.GetProvider(cloudSource.Provider);
+            if (provider == null)
+            {
+                plugin.PlayniteApi.Dialogs.ShowErrorMessage(
+                    $"Cloud provider {cloudSource.Provider} is not available.",
+                    "FastInstall Error");
+                return;
+            }
+
+            // Try to extract file ID from game ID (for files from folder sources)
+            var fileId = plugin.ExtractFileIdFromGameId(Game.GameId);
+            
+            // If not found in game ID, parse the cloud link (for direct file links)
+            if (string.IsNullOrWhiteSpace(fileId))
+            {
+                var parseResult = provider.ParseLink(cloudSource.CloudLink);
+                if (!parseResult.IsValid)
+                {
+                    plugin.PlayniteApi.Dialogs.ShowErrorMessage(
+                        $"Invalid cloud link: {parseResult.ErrorMessage}",
+                        "FastInstall Error");
+                    return;
+                }
+                fileId = parseResult.FileId;
+            }
+            
+            if (string.IsNullOrWhiteSpace(fileId))
+            {
+                plugin.PlayniteApi.Dialogs.ShowErrorMessage(
+                    "Could not determine file ID for download.",
+                    "FastInstall Error");
+                return;
+            }
+
+            // Clean game name (remove [Cloud] suffix)
+            var gameName = Game.Name;
+            if (gameName.EndsWith(" [Cloud]"))
+            {
+                gameName = gameName.Substring(0, gameName.Length - 8);
+            }
+
+            // Determine if this is likely an archive
+            var fileName = !string.IsNullOrWhiteSpace(cloudSource.DisplayName) 
+                ? cloudSource.DisplayName 
+                : gameName;
+            var isArchive = ArchiveHelper.IsArchiveFile(fileName) || 
+                           fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ||
+                           fileName.EndsWith(".7z", StringComparison.OrdinalIgnoreCase) ||
+                           fileName.EndsWith(".rar", StringComparison.OrdinalIgnoreCase);
+
+            // Create final destination path
+            var finalDestination = Path.Combine(destinationPath, gameName);
+
+            // Check for existing installation
+            if (Directory.Exists(finalDestination))
+            {
+                var conflictResolution = plugin.Settings?.ConflictResolution ?? ConflictResolution.Ask;
+
+                if (conflictResolution == ConflictResolution.Skip)
+                {
+                    plugin.PlayniteApi.Dialogs.ShowMessage(
+                        $"'{gameName}' is already installed at:\n{finalDestination}\n\nDownload skipped.",
+                        "FastInstall - Already Installed",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                    return;
+                }
+                else if (conflictResolution == ConflictResolution.Ask)
+                {
+                    var result = plugin.PlayniteApi.Dialogs.ShowMessage(
+                        $"'{gameName}' is already installed at:\n{finalDestination}\n\n" +
+                        "Do you want to overwrite the existing installation?",
+                        "FastInstall - Installation Conflict",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Question);
+
+                    if (result != MessageBoxResult.Yes)
+                    {
+                        logger.Info($"FastInstall: User cancelled cloud download of '{gameName}' due to existing installation");
+                        return;
+                    }
+                }
+            }
+
+            logger.Info($"FastInstall: Starting cloud download for '{gameName}'");
+            logger.Info($"FastInstall: FileId: {fileId}");
+            logger.Info($"FastInstall: Destination: {finalDestination}");
+            logger.Info($"FastInstall: IsArchive: {isArchive}");
+            logger.Info($"FastInstall: Provider: {cloudSource.Provider}");
+
+            // Check if CloudDownloadManager is initialized
+            if (CloudDownloadManager.Instance == null)
+            {
+                plugin.PlayniteApi.Dialogs.ShowErrorMessage(
+                    "CloudDownloadManager is not initialized.\n\n" +
+                    "Please restart Playnite and try again.",
+                    "FastInstall Error");
+                return;
+            }
+
+            // Start cloud download
+            try
+            {
+                CloudDownloadManager.Instance.StartDownload(
+                    Game,
+                    fileId,
+                    fileName,
+                    finalDestination,
+                    cloudSource.Provider,
+                    isArchive,
+                    (installedArgs) =>
+                    {
+                        // Installation completed
+                        InvokeOnInstalled(installedArgs);
+                    },
+                    () =>
+                    {
+                        // Installation cancelled
+                        InvokeOnInstallationCancelled(new GameInstallationCancelledEventArgs());
+                    });
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "FastInstall: Error starting cloud download");
+                plugin.PlayniteApi.Dialogs.ShowErrorMessage(
+                    $"Error starting download:\n\n{ex.Message}\n\n" +
+                    $"File ID: {fileId}\n" +
+                    $"Destination: {finalDestination}",
+                    "FastInstall Error");
+            }
+        }
+    }
+
     public class FastUninstallController : UninstallController
     {
         private static readonly ILogger logger = LogManager.GetLogger();
@@ -295,6 +464,8 @@ namespace FastInstall
                     return "Play with Xenia";
                 case GameType.PSP:
                     return "Play with PPSSPP";
+                case GameType.NDS:
+                    return "Play with MelonDS/DeSmuME";
                 case GameType.PC:
                     return "Play";
                 default:
@@ -718,7 +889,7 @@ namespace FastInstall
                     return exeFiles[0];
 
                 // Prefer certain names
-                var preferredNames = new[] { "rpcs3.exe", "xenia.exe", "cemu.exe", "dolphin.exe", "pcsx2.exe", "ppsspp.exe" };
+                var preferredNames = new[] { "rpcs3.exe", "xenia.exe", "cemu.exe", "dolphin.exe", "pcsx2.exe", "ppsspp.exe", "melonDS.exe", "DeSmuME.exe" };
                 foreach (var preferred in preferredNames)
                 {
                     var found = exeFiles.Where(f => Path.GetFileName(f).Equals(preferred, StringComparison.OrdinalIgnoreCase)).FirstOrDefault();

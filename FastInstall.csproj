@@ -58,6 +58,9 @@
     <Compile Include="FileCopyHelper.cs" />
     <Compile Include="ArchiveHelper.cs" />
     <Compile Include="BackgroundInstallManager.cs" />
+    <Compile Include="ICloudStorageProvider.cs" />
+    <Compile Include="GoogleDriveProvider.cs" />
+    <Compile Include="CloudDownloadManager.cs" />
     <Compile Include="InstallationProgressWindow.xaml.cs">
       <DependentUpon>InstallationProgressWindow.xaml</DependentUpon>
     </Compile>
