@@ -239,7 +239,7 @@ namespace FastInstall
         }
 
         /// <summary>
-        /// The Google Drive/Dropbox link (file or folder)
+        /// The Google Drive link (file or folder)
         /// </summary>
         public string CloudLink
         {
@@ -324,7 +324,7 @@ namespace FastInstall
         }
 
         /// <summary>
-        /// Cloud storage sources (Google Drive, Dropbox, etc.)
+        /// Google Drive storage sources
         /// </summary>
         public ObservableCollection<CloudSourceConfiguration> CloudSources
         {

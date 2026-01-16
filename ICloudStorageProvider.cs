@@ -122,8 +122,7 @@ namespace FastInstall
     /// </summary>
     public enum CloudProvider
     {
-        GoogleDrive,
-        Dropbox // Future support
+        GoogleDrive
     }
 
     /// <summary>
