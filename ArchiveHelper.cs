@@ -87,19 +87,19 @@ namespace FastInstall
                     if (string.IsNullOrWhiteSpace(sevenZipPath) || !File.Exists(sevenZipPath))
                     {
                         logger.Error($"FastInstall: 7-Zip executable not found at: {sevenZipPath}");
-                        throw new FileNotFoundException($"7-Zip executable not found. Please configure 7-Zip path in settings.");
+                        throw new FileNotFoundException(ResourceProvider.GetString("LOCFastInstall_Error_7ZipExeNotFound"));
                     }
 
                     if (!File.Exists(archivePath))
                     {
                         logger.Error($"FastInstall: Archive file not found: {archivePath}");
-                        throw new FileNotFoundException($"Archive file not found: {archivePath}");
+                        throw new FileNotFoundException(string.Format(ResourceProvider.GetString("LOCFastInstall_Error_ArchiveFileNotFoundFormat"), archivePath));
                     }
 
                     // Ensure destination directory exists
                     Directory.CreateDirectory(destinationPath);
 
-                    progressCallback?.Invoke($"Extracting archive: {Path.GetFileName(archivePath)}...");
+                    progressCallback?.Invoke(string.Format(ResourceProvider.GetString("LOCFastInstall_Archive_Progress_ExtractingFormat"), Path.GetFileName(archivePath)));
 
                     // Prepare 7-Zip command line arguments
                     // x = extract with full paths
@@ -125,7 +125,7 @@ namespace FastInstall
                     {
                         if (process == null)
                         {
-                            throw new Exception("Failed to start 7-Zip process");
+                            throw new Exception(ResourceProvider.GetString("LOCFastInstall_Error_7ZipStartFailed"));
                         }
 
                         // Wait for completion with cancellation support
@@ -158,11 +158,11 @@ namespace FastInstall
                         {
                             var errorOutput = process.StandardError.ReadToEnd();
                             logger.Error($"FastInstall: 7-Zip extraction failed with exit code {process.ExitCode}: {errorOutput}");
-                            throw new Exception($"Archive extraction failed. Exit code: {process.ExitCode}");
+                            throw new Exception(string.Format(ResourceProvider.GetString("LOCFastInstall_Error_ArchiveExtractionFailedExitCodeFormat"), process.ExitCode));
                         }
 
                         logger.Info($"FastInstall: Successfully extracted '{archivePath}' to '{destinationPath}'");
-                        progressCallback?.Invoke("Extraction completed.");
+                        progressCallback?.Invoke(ResourceProvider.GetString("LOCFastInstall_Archive_Progress_Completed"));
                         return true;
                     }
                 }

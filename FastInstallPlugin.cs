@@ -128,7 +128,7 @@ namespace FastInstall
                     logger.Info($"FastInstall: Fixed {fixedCount} games with problematic GameActions");
                     PlayniteApi.Notifications.Add(new NotificationMessage(
                         "FastInstall_Cleanup",
-                        $"FastInstall: Fixed {fixedCount} games with outdated emulator configurations.",
+                        string.Format(ResourceProvider.GetString("LOCFastInstall_Notification_CleanupFixedFormat"), fixedCount),
                         NotificationType.Info));
                 }
             }
@@ -228,7 +228,7 @@ namespace FastInstall
                     logger.Error(ex, $"FastInstall: Error scanning directory '{config.SourcePath}'.");
                     PlayniteApi.Notifications.Add(new NotificationMessage(
                         $"FastInstall_ScanError_{config.SourcePath.GetHashCode()}",
-                        $"FastInstall: Error scanning '{config.SourcePath}': {ex.Message}",
+                        string.Format(ResourceProvider.GetString("LOCFastInstall_Notification_ScanErrorFormat"), config.SourcePath, ex.Message),
                         NotificationType.Error));
                 }
             }
@@ -282,7 +282,9 @@ namespace FastInstall
                     if (parseResult.IsFolder && cloudSource.LinkType == CloudLinkType.SharedFolder)
                     {
                         // List files in the folder
-                        var files = provider.ListFilesAsync(parseResult.FileId).GetAwaiter().GetResult();
+                        // Note: GetGames() is synchronous, so we must use GetAwaiter().GetResult()
+                        // Using ConfigureAwait(false) to avoid potential deadlocks
+                        var files = provider.ListFilesAsync(parseResult.FileId).ConfigureAwait(false).GetAwaiter().GetResult();
                         foreach (var file in files.Where(f => !f.IsFolder))
                         {
                             var gameName = GetGameNameFromFileName(file.Name);

@@ -271,7 +271,7 @@ namespace FastInstall
                 var provider = GetProvider(job.Provider);
                 if (provider == null)
                 {
-                    throw new Exception($"Provider {job.Provider} not found. Make sure the plugin is properly initialized.");
+                    throw new Exception(string.Format(ResourceProvider.GetString("LOCFastInstall_Error_ProviderNotFoundFormat"), job.Provider));
                 }
 
                 logger.Info($"CloudDownloadManager: Starting download for '{job.Game.Name}'");
@@ -284,7 +284,7 @@ namespace FastInstall
                 {
                     if (job.ProgressWindow != null)
                     {
-                        job.ProgressWindow.StatusText.Text = "Connecting to Google Drive...";
+                        job.ProgressWindow.StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Status_ConnectingGoogleDrive");
                     }
                 });
 
@@ -302,7 +302,7 @@ namespace FastInstall
                         {
                             if (job.ProgressWindow != null)
                             {
-                                job.ProgressWindow.StatusText.Text = "Downloading from Google Drive...";
+                                job.ProgressWindow.StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Status_DownloadingGoogleDrive");
                                 job.ProgressWindow.UpdateProgress(new CopyProgressInfo
                                 {
                                     CopiedBytes = progress.BytesDownloaded,
@@ -322,13 +322,13 @@ namespace FastInstall
 
                 if (!success)
                 {
-                    throw new Exception("Download returned failure. Check Playnite logs for details.");
+                    throw new Exception(ResourceProvider.GetString("LOCFastInstall_Error_DownloadReturnedFailure"));
                 }
                 
                 // Verify file was downloaded
                 if (!File.Exists(job.TempDownloadPath))
                 {
-                    throw new Exception("Downloaded file not found at temp location. Download may have failed silently.");
+                    throw new Exception(ResourceProvider.GetString("LOCFastInstall_Error_DownloadedFileNotFound"));
                 }
                 
                 var downloadedFile = new FileInfo(job.TempDownloadPath);
@@ -336,7 +336,7 @@ namespace FastInstall
                 
                 if (downloadedFile.Length == 0)
                 {
-                    throw new Exception("Downloaded file is empty. The file might not be publicly shared.");
+                    throw new Exception(ResourceProvider.GetString("LOCFastInstall_Error_DownloadedFileEmpty"));
                 }
 
                 // Handle archive extraction if needed
@@ -349,14 +349,14 @@ namespace FastInstall
                     {
                         if (job.ProgressWindow != null)
                         {
-                            job.ProgressWindow.StatusText.Text = "Extracting archive...";
+                            job.ProgressWindow.StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Status_ExtractingArchive");
                         }
                     });
 
                     var sevenZipPath = getSevenZipPathFunc?.Invoke();
                     if (string.IsNullOrWhiteSpace(sevenZipPath) || !File.Exists(sevenZipPath))
                     {
-                        throw new Exception("7-Zip path not configured. Please set it in FastInstall settings.");
+                        throw new Exception(ResourceProvider.GetString("LOCFastInstall_Error_SevenZipNotConfigured"));
                     }
 
                     tempExtractPath = Path.Combine(Path.GetTempPath(), "FastInstall", "Extract", Guid.NewGuid().ToString());
@@ -380,7 +380,7 @@ namespace FastInstall
 
                     if (!extractSuccess)
                     {
-                        throw new Exception("Archive extraction failed");
+                        throw new Exception(ResourceProvider.GetString("LOCFastInstall_Error_ArchiveExtractionFailed"));
                     }
 
                     // Check if extraction created a single subfolder
@@ -400,7 +400,7 @@ namespace FastInstall
                 {
                     if (job.ProgressWindow != null)
                     {
-                        job.ProgressWindow.StatusText.Text = "Copying to destination...";
+                        job.ProgressWindow.StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Status_CopyingToDestination");
                     }
                 });
 
@@ -465,7 +465,7 @@ namespace FastInstall
                 // Show notification
                 playniteAPI.Notifications.Add(new NotificationMessage(
                     $"FastInstall_CloudComplete_{job.JobId}",
-                    $"Download completato: {job.Game.Name}",
+                    string.Format(ResourceProvider.GetString("LOCFastInstall_Notification_CloudCompletedFormat"), job.Game.Name),
                     NotificationType.Info));
 
                 logger.Info($"CloudDownloadManager: Completed download for '{job.Game.Name}'");
@@ -488,7 +488,7 @@ namespace FastInstall
                     {
                         if (job.ProgressWindow != null)
                         {
-                            job.ProgressWindow.StatusText.Text = "Download paused";
+                            job.ProgressWindow.StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Status_DownloadPaused");
                             job.ProgressWindow.UpdatePauseState(true);
                         }
                     });
@@ -533,7 +533,7 @@ namespace FastInstall
 
                 playniteAPI.Notifications.Add(new NotificationMessage(
                     $"FastInstall_CloudError_{job.JobId}",
-                    $"Download fallito: {job.Game.Name} - {errorMsg}",
+                    string.Format(ResourceProvider.GetString("LOCFastInstall_Notification_CloudFailedFormat"), job.Game.Name, errorMsg),
                     NotificationType.Error));
             }
             finally

@@ -182,8 +182,8 @@ namespace FastInstall
             if (IsInstalling(game.Id))
             {
                 playniteAPI.Dialogs.ShowMessage(
-                    $"'{game.Name}' is already being installed.",
-                    "Installation in Progress",
+                    string.Format(ResourceProvider.GetString("LOCFastInstall_Message_AlreadyInstallingFormat"), game.Name),
+                    ResourceProvider.GetString("LOCFastInstall_DialogTitle_InstallationInProgress"),
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
                 return;
@@ -384,9 +384,9 @@ namespace FastInstall
             {
                 if (job.ProgressWindow != null)
                 {
-                    job.ProgressWindow.StatusText.Text = "Installation cancelled";
+                    job.ProgressWindow.StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Status_InstallationCancelled");
                     job.ProgressWindow.StatusText.Foreground = System.Windows.Media.Brushes.Orange;
-                    job.ProgressWindow.CancelButton.Content = "Close";
+                    job.ProgressWindow.CancelButton.Content = ResourceProvider.GetString("LOCFastInstall_Progress_Button_Close");
                     job.ProgressWindow.CancelButton.Background = System.Windows.Media.Brushes.Gray;
                     job.ProgressWindow.AllowClose();
                 }
@@ -439,13 +439,8 @@ namespace FastInstall
                         playniteAPI.MainView.UIDispatcher.Invoke(() =>
                         {
                             dialogResult = MessageBox.Show(
-                                $"Spazio su disco insufficiente!\n\n" +
-                                $"Gioco: {job.Game.Name}\n" +
-                                $"Spazio richiesto: {requiredFormatted}\n" +
-                                $"Spazio disponibile: {availableFormatted}\n" +
-                                $"Spazio mancante: {missingFormatted}\n\n" +
-                                $"Vuoi continuare comunque? L'installazione potrebbe fallire.",
-                                "FastInstall - Spazio su disco insufficiente",
+                                string.Format(ResourceProvider.GetString("LOCFastInstall_DiskSpace_WarningMessageFormat"), job.Game.Name, requiredFormatted, availableFormatted, missingFormatted),
+                                ResourceProvider.GetString("LOCFastInstall_DiskSpace_WarningTitle"),
                                 MessageBoxButton.YesNo,
                                 MessageBoxImage.Warning);
                         });
@@ -457,13 +452,13 @@ namespace FastInstall
                         job.Status = InstallationStatus.Cancelled;
                         playniteAPI.MainView.UIDispatcher.Invoke(() =>
                         {
-                            job.ProgressWindow?.ShowError("Installazione annullata: spazio su disco insufficiente");
+                            job.ProgressWindow?.ShowError(ResourceProvider.GetString("LOCFastInstall_DiskSpace_CancelledMessage"));
                             job.ProgressWindow?.AllowClose();
                         });
 
                         playniteAPI.Notifications.Add(new NotificationMessage(
                             $"FastInstall_InsufficientSpace_{job.Game.Id}",
-                            $"Installazione di '{job.Game.Name}' annullata: spazio su disco insufficiente",
+                            string.Format(ResourceProvider.GetString("LOCFastInstall_Notification_InsufficientSpaceFormat"), job.Game.Name),
                             NotificationType.Error));
 
                         logger.Info($"FastInstall: Installation of '{job.Game.Name}' cancelled due to insufficient disk space");
@@ -492,7 +487,7 @@ namespace FastInstall
                     var sevenZipPath = GetSevenZipPath();
                     if (string.IsNullOrWhiteSpace(sevenZipPath))
                     {
-                        throw new Exception("7-Zip path is not configured. Please set it in FastInstall settings.");
+                        throw new Exception(ResourceProvider.GetString("LOCFastInstall_Error_SevenZipNotConfigured"));
                     }
 
                     // Create temporary extraction directory
@@ -504,7 +499,7 @@ namespace FastInstall
                     {
                         if (job.ProgressWindow != null)
                         {
-                            job.ProgressWindow.StatusText.Text = "Extracting archive...";
+                            job.ProgressWindow.StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Status_ExtractingArchive");
                         }
                     });
 
@@ -527,7 +522,7 @@ namespace FastInstall
 
                     if (!extractResult)
                     {
-                        throw new Exception("Archive extraction failed or was cancelled.");
+                        throw new Exception(ResourceProvider.GetString("LOCFastInstall_Error_ArchiveExtractionFailedOrCancelled"));
                     }
 
                     // After extraction, use the extracted directory as source
@@ -551,7 +546,7 @@ namespace FastInstall
                         var sevenZipPath = GetSevenZipPath();
                         if (string.IsNullOrWhiteSpace(sevenZipPath))
                         {
-                            throw new Exception("7-Zip path is not configured. Please set it in FastInstall settings.");
+                            throw new Exception(ResourceProvider.GetString("LOCFastInstall_Error_SevenZipNotConfigured"));
                         }
 
                         // Create temporary extraction directory
@@ -563,7 +558,7 @@ namespace FastInstall
                         {
                             if (job.ProgressWindow != null)
                             {
-                                job.ProgressWindow.StatusText.Text = "Extracting archive...";
+                                job.ProgressWindow.StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Status_ExtractingArchive");
                             }
                         });
 
@@ -586,7 +581,7 @@ namespace FastInstall
 
                         if (!extractResult)
                         {
-                            throw new Exception("Archive extraction failed or was cancelled.");
+                            throw new Exception(ResourceProvider.GetString("LOCFastInstall_Error_ArchiveExtractionFailedOrCancelled"));
                         }
 
                         // After extraction, use the extracted directory as source
@@ -613,7 +608,7 @@ namespace FastInstall
                 {
                     if (job.ProgressWindow != null)
                     {
-                        job.ProgressWindow.StatusText.Text = "Copying files...";
+                        job.ProgressWindow.StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Progress_Status_Copying");
                     }
                 });
 
@@ -657,7 +652,7 @@ namespace FastInstall
                         {
                             if (job.ProgressWindow != null)
                             {
-                                job.ProgressWindow.StatusText.Text = "Installation paused";
+                                job.ProgressWindow.StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Status_InstallationPaused");
                                 job.ProgressWindow.StatusText.Foreground = System.Windows.Media.Brushes.Yellow;
                             }
                         });
@@ -710,7 +705,7 @@ namespace FastInstall
                     {
                         if (job.ProgressWindow != null)
                         {
-                            job.ProgressWindow.StatusText.Text = "Verifica integrità file...";
+                            job.ProgressWindow.StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Status_IntegrityCheck");
                         }
                     });
 
@@ -735,23 +730,27 @@ namespace FastInstall
                     if (!integrityResult.IsValid)
                     {
                         var errorDetails = new System.Text.StringBuilder();
-                        errorDetails.AppendLine($"Verifica integrità fallita per '{job.Game.Name}':");
+                        errorDetails.AppendLine(string.Format(ResourceProvider.GetString("LOCFastInstall_Integrity_Error_HeaderFormat"), job.Game.Name));
                         
                         if (integrityResult.MissingFiles > 0)
                         {
-                            errorDetails.AppendLine($"File mancanti: {integrityResult.MissingFiles}");
+                            errorDetails.AppendLine(string.Format(ResourceProvider.GetString("LOCFastInstall_Integrity_Error_MissingFilesFormat"), integrityResult.MissingFiles));
                             if (integrityResult.MissingFilePaths.Count > 0)
                             {
-                                errorDetails.AppendLine($"Primi file mancanti: {string.Join(", ", integrityResult.MissingFilePaths.Take(5))}");
+                                errorDetails.AppendLine(string.Format(
+                                    ResourceProvider.GetString("LOCFastInstall_Integrity_Error_MissingFilesSampleFormat"),
+                                    string.Join(", ", integrityResult.MissingFilePaths.Take(5))));
                             }
                         }
                         
                         if (integrityResult.MismatchedFiles > 0)
                         {
-                            errorDetails.AppendLine($"File con dimensioni diverse: {integrityResult.MismatchedFiles}");
+                            errorDetails.AppendLine(string.Format(ResourceProvider.GetString("LOCFastInstall_Integrity_Error_MismatchedFilesFormat"), integrityResult.MismatchedFiles));
                             if (integrityResult.MismatchedFilePaths.Count > 0)
                             {
-                                errorDetails.AppendLine($"Primi file con problemi: {string.Join(", ", integrityResult.MismatchedFilePaths.Take(5))}");
+                                errorDetails.AppendLine(string.Format(
+                                    ResourceProvider.GetString("LOCFastInstall_Integrity_Error_MismatchedFilesSampleFormat"),
+                                    string.Join(", ", integrityResult.MismatchedFilePaths.Take(5))));
                             }
                         }
 
@@ -760,13 +759,17 @@ namespace FastInstall
                         // Show error notification
                         playniteAPI.Notifications.Add(new NotificationMessage(
                             $"FastInstall_IntegrityError_{job.Game.Id}",
-                            $"Verifica integrità fallita per '{job.Game.Name}'. Alcuni file potrebbero essere corrotti.",
+                            string.Format(ResourceProvider.GetString("LOCFastInstall_Notification_IntegrityFailedFormat"), job.Game.Name),
                             NotificationType.Error));
 
                         // Show error in progress window
                         playniteAPI.MainView.UIDispatcher.Invoke(() =>
                         {
-                            job.ProgressWindow?.ShowError($"Verifica integrità fallita: {integrityResult.MissingFiles} file mancanti, {integrityResult.MismatchedFiles} file con problemi");
+                            var shortMsg = string.Format(
+                                ResourceProvider.GetString("LOCFastInstall_Integrity_Error_ShortFormat"),
+                                integrityResult.MissingFiles,
+                                integrityResult.MismatchedFiles);
+                            job.ProgressWindow?.ShowError(shortMsg);
                         });
                     }
                     else
@@ -793,8 +796,8 @@ namespace FastInstall
 
                     // Show notification in Italian
                     var notificationMessage = integrityResult.IsValid
-                        ? $"Installazione del gioco {job.Game.Name} completata"
-                        : $"Installazione del gioco {job.Game.Name} completata con errori di integrità";
+                        ? string.Format(ResourceProvider.GetString("LOCFastInstall_Notification_InstallCompletedFormat"), job.Game.Name)
+                        : string.Format(ResourceProvider.GetString("LOCFastInstall_Notification_InstallCompletedWithIntegrityErrorsFormat"), job.Game.Name);
 
                     playniteAPI.Notifications.Add(new NotificationMessage(
                         $"FastInstall_Complete_{job.Game.Id}",
@@ -825,7 +828,7 @@ namespace FastInstall
                     {
                         if (job.ProgressWindow != null)
                         {
-                            job.ProgressWindow.StatusText.Text = "Installation paused";
+                            job.ProgressWindow.StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Status_InstallationPaused");
                             job.ProgressWindow.StatusText.Foreground = System.Windows.Media.Brushes.Yellow;
                             job.ProgressWindow.UpdatePauseState(true);
                         }
@@ -888,7 +891,7 @@ namespace FastInstall
                 // Show notification
                 playniteAPI.Notifications.Add(new NotificationMessage(
                     $"FastInstall_Error_{job.Game.Id}",
-                    $"Failed to install '{job.Game.Name}': {errorMessage}",
+                    string.Format(ResourceProvider.GetString("LOCFastInstall_Notification_InstallFailedFormat"), job.Game.Name, errorMessage),
                     NotificationType.Error));
 
                 logger.Error(ex, $"FastInstall: Error installing '{job.Game.Name}'");
@@ -926,9 +929,9 @@ namespace FastInstall
                     {
                         if (job.ProgressWindow != null)
                         {
-                            job.ProgressWindow.StatusText.Text = "Installation cancelled";
+                            job.ProgressWindow.StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Status_InstallationCancelled");
                             job.ProgressWindow.StatusText.Foreground = System.Windows.Media.Brushes.Orange;
-                            job.ProgressWindow.CancelButton.Content = "Close";
+                            job.ProgressWindow.CancelButton.Content = ResourceProvider.GetString("LOCFastInstall_Progress_Button_Close");
                             job.ProgressWindow.CancelButton.Background = System.Windows.Media.Brushes.Gray;
                             job.ProgressWindow.AllowClose();
                         }
@@ -1002,7 +1005,7 @@ namespace FastInstall
                     {
                         if (job.ProgressWindow != null)
                         {
-                            job.ProgressWindow.StatusText.Text = "Installation paused";
+                            job.ProgressWindow.StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Status_InstallationPaused");
                             job.ProgressWindow.StatusText.Foreground = System.Windows.Media.Brushes.Yellow;
                             job.ProgressWindow.UpdatePauseState(true);
                         }
@@ -1031,7 +1034,7 @@ namespace FastInstall
                     {
                         if (job.ProgressWindow != null)
                         {
-                            job.ProgressWindow.StatusText.Text = "Resuming installation...";
+                            job.ProgressWindow.StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Status_ResumingInstallation");
                             job.ProgressWindow.StatusText.Foreground = System.Windows.Media.Brushes.White;
                             job.ProgressWindow.UpdatePauseState(false);
                         }
@@ -1071,7 +1074,7 @@ namespace FastInstall
                     // Show notification that cleanup is starting
                     playniteAPI.Notifications.Add(new NotificationMessage(
                         $"FastInstall_Cleanup_{destinationPath.GetHashCode()}",
-                        "FastInstall: Cleaning up cancelled installation...",
+                        ResourceProvider.GetString("LOCFastInstall_Notification_CleanupStarting"),
                         NotificationType.Info));
 
                     // Use a more efficient deletion method for large directories
@@ -1084,7 +1087,7 @@ namespace FastInstall
                     logger.Warn(ex, $"FastInstall: Could not clean up partial copy at '{destinationPath}'");
                     playniteAPI.Notifications.Add(new NotificationMessage(
                         $"FastInstall_CleanupError_{destinationPath.GetHashCode()}",
-                        $"FastInstall: Could not clean up '{Path.GetFileName(destinationPath)}'. You may need to delete it manually.",
+                        string.Format(ResourceProvider.GetString("LOCFastInstall_Notification_CleanupFailedFormat"), Path.GetFileName(destinationPath)),
                         NotificationType.Error));
                 }
             });
@@ -1156,19 +1159,19 @@ namespace FastInstall
             {
                 if (ioEx.Message.Contains("not enough space") || ioEx.HResult == -2147024784)
                 {
-                    return "Not enough disk space";
+                    return ResourceProvider.GetString("LOCFastInstall_Error_NotEnoughDiskSpace");
                 }
-                return $"IO Error: {ioEx.Message}";
+                return string.Format(ResourceProvider.GetString("LOCFastInstall_Error_IoErrorFormat"), ioEx.Message);
             }
             
             if (ex is UnauthorizedAccessException)
             {
-                return "Permission denied - check folder permissions";
+                return ResourceProvider.GetString("LOCFastInstall_Error_PermissionDenied");
             }
             
             if (ex is DirectoryNotFoundException)
             {
-                return "Source folder not found";
+                return ResourceProvider.GetString("LOCFastInstall_Error_SourceFolderNotFound");
             }
 
             return ex.Message;

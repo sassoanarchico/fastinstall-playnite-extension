@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Threading;
+using Playnite.SDK;
 using Playnite.SDK.Models;
 
 namespace FastInstall
@@ -46,7 +47,7 @@ namespace FastInstall
                 var instance = BackgroundInstallManager.Instance;
                 if (instance == null)
                 {
-                    StatusText.Text = "Download manager not initialized";
+                    StatusText.Text = ResourceProvider.GetString("LOCFastInstall_DownloadManager_NotInitialized");
                     downloadItems.Clear();
                     return;
                 }
@@ -55,7 +56,8 @@ namespace FastInstall
                 var queueInfo = instance.GetQueueInfo();
 
                 // Update status text
-                StatusText.Text = $"{queueInfo.CurrentlyInstalling.Count} installing, {queueInfo.Queued} queued, {queueInfo.Paused} paused";
+                var statusFormat = ResourceProvider.GetString("LOCFastInstall_DownloadManager_StatusFormat");
+                StatusText.Text = string.Format(statusFormat, queueInfo.CurrentlyInstalling.Count, queueInfo.Queued, queueInfo.Paused);
 
                 // Update download items
                 var currentGameIds = new HashSet<Guid>(downloadItems.Select(d => d.GameId));
@@ -87,11 +89,11 @@ namespace FastInstall
                 // Sort: InProgress first, then Pending, then Paused, then others
                 var sorted = downloadItems.OrderBy(d =>
                 {
-                    switch (d.StatusText)
+                    switch (d.Status)
                     {
-                        case "Installing": return 0;
-                        case "Queued": return 1;
-                        case "Paused": return 2;
+                        case InstallationStatus.InProgress: return 0;
+                        case InstallationStatus.Pending: return 1;
+                        case InstallationStatus.Paused: return 2;
                         default: return 3;
                     }
                 }).ToList();
@@ -140,8 +142,8 @@ namespace FastInstall
             if (sender is FrameworkElement element && element.Tag is Guid gameId)
             {
                 var result = MessageBox.Show(
-                    "Are you sure you want to cancel this installation?",
-                    "Cancel Installation",
+                    ResourceProvider.GetString("LOCFastInstall_DownloadManager_ConfirmCancel_Message"),
+                    ResourceProvider.GetString("LOCFastInstall_DownloadManager_ConfirmCancel_Title"),
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Question);
 
@@ -200,6 +202,7 @@ namespace FastInstall
         public bool CanPause { get; set; }
         public bool CanResume { get; set; }
         public bool CanCancel { get; set; }
+        public InstallationStatus Status { get; set; }
 
         public DownloadItemViewModel(InstallationJob job)
         {
@@ -210,24 +213,25 @@ namespace FastInstall
         {
             GameId = job.Game.Id;
             GameName = job.Game.Name;
+            Status = job.Status;
 
             // Set priority text and index
             switch (job.Priority)
             {
                 case InstallationPriority.Low:
-                    PriorityText = "Low";
+                    PriorityText = ResourceProvider.GetString("LOCFastInstall_DownloadManager_Priority_Low");
                     PriorityIndex = 0;
                     break;
                 case InstallationPriority.Normal:
-                    PriorityText = "Normal";
+                    PriorityText = ResourceProvider.GetString("LOCFastInstall_DownloadManager_Priority_Normal");
                     PriorityIndex = 1;
                     break;
                 case InstallationPriority.High:
-                    PriorityText = "High";
+                    PriorityText = ResourceProvider.GetString("LOCFastInstall_DownloadManager_Priority_High");
                     PriorityIndex = 2;
                     break;
                 default:
-                    PriorityText = "Normal";
+                    PriorityText = ResourceProvider.GetString("LOCFastInstall_DownloadManager_Priority_Normal");
                     PriorityIndex = 1;
                     break;
             }
@@ -235,32 +239,32 @@ namespace FastInstall
             switch (job.Status)
             {
                 case InstallationStatus.Pending:
-                    StatusText = "Queued";
+                    StatusText = ResourceProvider.GetString("LOCFastInstall_DownloadManager_Status_Queued");
                     break;
                 case InstallationStatus.InProgress:
-                    StatusText = "Installing";
+                    StatusText = ResourceProvider.GetString("LOCFastInstall_DownloadManager_Status_Installing");
                     break;
                 case InstallationStatus.Paused:
-                    StatusText = "Paused";
+                    StatusText = ResourceProvider.GetString("LOCFastInstall_DownloadManager_Status_Paused");
                     break;
                 case InstallationStatus.Completed:
-                    StatusText = "Completed";
+                    StatusText = ResourceProvider.GetString("LOCFastInstall_DownloadManager_Status_Completed");
                     break;
                 case InstallationStatus.Failed:
-                    StatusText = "Failed";
+                    StatusText = ResourceProvider.GetString("LOCFastInstall_DownloadManager_Status_Failed");
                     break;
                 case InstallationStatus.Cancelled:
-                    StatusText = "Cancelled";
+                    StatusText = ResourceProvider.GetString("LOCFastInstall_DownloadManager_Status_Cancelled");
                     break;
                 default:
-                    StatusText = "Unknown";
+                    StatusText = ResourceProvider.GetString("LOCFastInstall_DownloadManager_Status_Unknown");
                     break;
             }
 
             // Update progress if available from progress window
             // Note: We can't directly access UI elements from another thread, so we'll show status-based info
-            ProgressText = job.Status == InstallationStatus.InProgress ? "In Progress" : "--";
-            SpeedText = job.Status == InstallationStatus.InProgress ? "Active" : "--";
+            ProgressText = job.Status == InstallationStatus.InProgress ? ResourceProvider.GetString("LOCFastInstall_DownloadManager_Progress_InProgress") : "--";
+            SpeedText = job.Status == InstallationStatus.InProgress ? ResourceProvider.GetString("LOCFastInstall_DownloadManager_Speed_Active") : "--";
 
             CanPause = job.Status == InstallationStatus.InProgress;
             CanResume = job.Status == InstallationStatus.Paused;

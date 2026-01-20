@@ -3,8 +3,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:FastInstall"
              mc:Ignorable="d"
              d:DesignHeight="700" d:DesignWidth="950">
+
+    <UserControl.Resources>
+        <local:ConflictResolutionToLocalizedStringConverter x:Key="ConflictResolutionToLocalizedStringConverter"/>
+    </UserControl.Resources>
 
     <Grid Margin="10">
         <Grid.RowDefinitions>
@@ -16,17 +21,17 @@
         <TabControl Grid.Row="0">
             
             <!-- TAB 1: Local Sources -->
-            <TabItem Header="📁 Local Sources">
+            <TabItem Header="{DynamicResource LOCFastInstall_Settings_Tab_LocalSources}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="15">
                     <StackPanel>
                         <!-- Header -->
-                        <TextBlock Text="Local Folder Configurations" 
+                        <TextBlock Text="{DynamicResource LOCFastInstall_Settings_Local_Title}" 
                                    FontSize="18" 
                                    FontWeight="Bold"
                                    Margin="0,0,0,10"/>
 
                         <!-- Description -->
-                        <TextBlock Text="Configure source and destination folder pairs. Games will be scanned from source folders and can be installed to destination folders."
+                        <TextBlock Text="{DynamicResource LOCFastInstall_Settings_Local_Description}"
                                    TextWrapping="Wrap" 
                                    Margin="0,0,0,15"
                                    Opacity="0.8"/>
@@ -46,11 +51,11 @@
                                   Margin="0,0,0,10">
 
                             <DataGrid.Columns>
-                                <DataGridCheckBoxColumn Header="✓" 
+                                <DataGridCheckBoxColumn Header="{DynamicResource LOCFastInstall_Settings_Column_Enabled}" 
                                                         Width="40"
                                                         Binding="{Binding IsEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
-                                <DataGridTemplateColumn Header="Source Path (Archive HDD)" Width="2*">
+                                <DataGridTemplateColumn Header="{DynamicResource LOCFastInstall_Settings_Column_SourcePath}" Width="2*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <DockPanel>
@@ -68,7 +73,7 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn Header="Destination Path (Fast SSD)" Width="2*">
+                                <DataGridTemplateColumn Header="{DynamicResource LOCFastInstall_Settings_Column_DestinationPath}" Width="2*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <DockPanel>
@@ -86,7 +91,7 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn Header="Platform" Width="130">
+                                <DataGridTemplateColumn Header="{DynamicResource LOCFastInstall_Settings_Column_Platform}" Width="130">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <ComboBox ItemsSource="{Binding DataContext.AvailablePlatforms, RelativeSource={RelativeSource AncestorType=DataGrid}}"
@@ -96,7 +101,7 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn Header="Emulator" Width="*">
+                                <DataGridTemplateColumn Header="{DynamicResource LOCFastInstall_Settings_Column_Emulator}" Width="*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <ComboBox ItemsSource="{Binding DataContext.AvailableEmulators, RelativeSource={RelativeSource AncestorType=DataGrid}}"
@@ -108,7 +113,7 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn Header="Profile" Width="*">
+                                <DataGridTemplateColumn Header="{DynamicResource LOCFastInstall_Settings_Column_Profile}" Width="*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <ComboBox ItemsSource="{Binding AvailableProfilesForEmulator}"
@@ -124,11 +129,11 @@
 
                         <!-- Buttons -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
-                            <Button Content="➕ Add Configuration" 
+                            <Button Content="{DynamicResource LOCFastInstall_Settings_Button_AddConfig}" 
                                     Padding="15,8" 
                                     Margin="0,0,10,0"
                                     Command="{Binding AddConfigurationCommand}"/>
-                            <Button Content="🗑 Remove Selected" 
+                            <Button Content="{DynamicResource LOCFastInstall_Settings_Button_RemoveSelected}" 
                                     Padding="15,8"
                                     Command="{Binding RemoveConfigurationCommand}"/>
                         </StackPanel>
@@ -136,17 +141,17 @@
                         <!-- General Settings -->
                         <Border Background="#15000000" CornerRadius="5" Padding="15" Margin="0,0,0,15">
                             <StackPanel>
-                                <TextBlock Text="General Settings" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
+                                <TextBlock Text="{DynamicResource LOCFastInstall_Settings_General_Title}" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
                                 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                     <CheckBox x:Name="EnableParallelCheckBox"
-                                              Content="Enable Parallel Downloads"
+                                              Content="{DynamicResource LOCFastInstall_Settings_EnableParallel}"
                                               IsChecked="{Binding Settings.EnableParallelDownloads, Mode=TwoWay}"
                                               VerticalContentAlignment="Center"
                                               Margin="0,0,15,0"
                                               Checked="EnableParallelCheckBox_Checked"
                                               Unchecked="EnableParallelCheckBox_Unchecked"/>
-                                    <TextBlock Text="Max Parallel: " VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                    <TextBlock Text="{DynamicResource LOCFastInstall_Settings_MaxParallel_Label}" VerticalAlignment="Center" Margin="0,0,5,0"/>
                                     <TextBox x:Name="MaxParallelTextBox"
                                              Text="{Binding Settings.MaxParallelDownloads, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Width="50" Height="22"
@@ -155,23 +160,29 @@
                                              IsEnabled="{Binding ElementName=EnableParallelCheckBox, Path=IsChecked}"
                                              PreviewTextInput="MaxParallelTextBox_PreviewTextInput"
                                              LostFocus="MaxParallelTextBox_LostFocus"/>
-                                    <TextBlock Text="(1-10)" Opacity="0.7" Margin="5,0,0,0" VerticalAlignment="Center" FontSize="11"/>
+                                    <TextBlock Text="{DynamicResource LOCFastInstall_Settings_MaxParallel_Hint}" Opacity="0.7" Margin="5,0,0,0" VerticalAlignment="Center" FontSize="11"/>
                                 </StackPanel>
                                 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                    <TextBlock Text="Conflict Resolution: " VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    <TextBlock Text="{DynamicResource LOCFastInstall_Settings_ConflictResolution_Label}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                     <ComboBox x:Name="ConflictResolutionComboBox"
                                               SelectedItem="{Binding Settings.ConflictResolution, Mode=TwoWay}"
-                                              Width="200" VerticalContentAlignment="Center"/>
+                                              Width="200" VerticalContentAlignment="Center">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Converter={StaticResource ConflictResolutionToLocalizedStringConverter}}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
                                 </StackPanel>
                                 
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="7-Zip Path: " VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    <TextBlock Text="{DynamicResource LOCFastInstall_Settings_SevenZipPath_Label}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                     <TextBox Text="{Binding Settings.SevenZipPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Width="280" Height="22"
                                              VerticalContentAlignment="Center" Margin="0,0,10,0"/>
-                                    <Button Content="Browse..." Width="80" Height="22" Click="BrowseSevenZipButton_Click" Margin="0,0,10,0"/>
-                                    <Button Content="Download 7-Zip" Width="100" Height="22" Click="DownloadSevenZipButton_Click"/>
+                                    <Button Content="{DynamicResource LOCFastInstall_Settings_Button_Browse}" Width="80" Height="22" Click="BrowseSevenZipButton_Click" Margin="0,0,10,0"/>
+                                    <Button Content="{DynamicResource LOCFastInstall_Settings_Button_Download7Zip}" Width="100" Height="22" Click="DownloadSevenZipButton_Click"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
@@ -179,14 +190,14 @@
                         <!-- Info Box -->
                         <Border Background="#20808080" CornerRadius="5" Padding="15">
                             <StackPanel>
-                                <TextBlock Text="Supported Platforms:" FontWeight="Bold" Margin="0,0,0,5"/>
+                                <TextBlock Text="{DynamicResource LOCFastInstall_Settings_SupportedPlatforms_Title}" FontWeight="Bold" Margin="0,0,0,5"/>
                                 <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.9">
-                                    PC • PlayStation 3 (RPCS3) • PlayStation 2 (PCSX2) • PSP (PPSSPP) • Nintendo Switch (Ryujinx/Yuzu) • Wii U (Cemu) • Wii/GameCube (Dolphin) • Nintendo DS (MelonDS/DeSmuME) • Xbox 360 (Xenia)
+                                    <Run Text="{DynamicResource LOCFastInstall_Settings_SupportedPlatforms_Text}"/>
                                 </TextBlock>
                                 
-                                <TextBlock Text="Configure Emulators:" FontWeight="Bold" Margin="0,10,0,5"/>
+                                <TextBlock Text="{DynamicResource LOCFastInstall_Settings_ConfigureEmulators_Title}" FontWeight="Bold" Margin="0,10,0,5"/>
                                 <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.9">
-                                    Go to Playnite → Settings → Emulation to add or configure emulators.
+                                    <Run Text="{DynamicResource LOCFastInstall_Settings_ConfigureEmulators_Text}"/>
                                 </TextBlock>
                             </StackPanel>
                         </Border>
@@ -195,17 +206,17 @@
             </TabItem>
 
             <!-- TAB 2: Cloud Sources (Google Drive) -->
-            <TabItem Header="☁️ Google Drive">
+            <TabItem Header="{DynamicResource LOCFastInstall_Settings_Tab_GoogleDrive}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="15">
                     <StackPanel>
                         <!-- Header -->
-                        <TextBlock Text="Google Drive Integration" 
+                        <TextBlock Text="{DynamicResource LOCFastInstall_Settings_GD_Title}" 
                                    FontSize="18" 
                                    FontWeight="Bold"
                                    Margin="0,0,0,10"/>
 
                         <!-- Description -->
-                        <TextBlock Text="Download games directly from Google Drive. You can add links to individual files or shared folders."
+                        <TextBlock Text="{DynamicResource LOCFastInstall_Settings_GD_Description}"
                                    TextWrapping="Wrap" 
                                    Margin="0,0,0,15"
                                    Opacity="0.8"/>
@@ -213,21 +224,21 @@
                         <!-- API Key Section -->
                         <Border Background="#15000000" CornerRadius="5" Padding="15" Margin="0,0,0,15">
                             <StackPanel>
-                                <TextBlock Text="🔑 API Key Configuration" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
+                                <TextBlock Text="{DynamicResource LOCFastInstall_Settings_GD_ApiKey_Title}" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
                                 
                                 <TextBlock TextWrapping="Wrap" Margin="0,0,0,10" Opacity="0.9">
-                                    An API Key is optional for direct file links, but required for listing contents of shared folders.
+                                    <Run Text="{DynamicResource LOCFastInstall_Settings_GD_ApiKey_Description}"/>
                                 </TextBlock>
                                 
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                    <TextBlock Text="Google Drive API Key: " VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    <TextBlock Text="{DynamicResource LOCFastInstall_Settings_GD_ApiKey_Label}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                     <TextBox x:Name="GoogleApiKeyTextBox"
                                              Text="{Binding Settings.GoogleDriveApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Width="400" Height="22"
                                              VerticalContentAlignment="Center"/>
                                 </StackPanel>
 
-                                <Button Content="📖 How to get an API Key" 
+                                <Button Content="{DynamicResource LOCFastInstall_Settings_GD_Button_HowToApiKey}" 
                                         HorizontalAlignment="Left"
                                         Padding="10,5"
                                         Click="ShowApiKeyHelpButton_Click"/>
@@ -235,7 +246,7 @@
                         </Border>
 
                         <!-- Cloud Sources DataGrid -->
-                        <TextBlock Text="Cloud Sources" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
+                        <TextBlock Text="{DynamicResource LOCFastInstall_Settings_GD_CloudSources_Title}" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
                         
                         <DataGrid ItemsSource="{Binding EditingCloudSources}"
                                   SelectedItem="{Binding SelectedCloudSource, Mode=TwoWay}"
@@ -251,19 +262,19 @@
                                   Margin="0,0,0,10">
 
                             <DataGrid.Columns>
-                                <DataGridCheckBoxColumn Header="✓" 
+                                <DataGridCheckBoxColumn Header="{DynamicResource LOCFastInstall_Settings_Column_Enabled}" 
                                                         Width="40"
                                                         Binding="{Binding IsEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
-                                <DataGridTextColumn Header="Name" 
+                                <DataGridTextColumn Header="{DynamicResource LOCFastInstall_Settings_GD_Column_Name}" 
                                                     Width="150"
                                                     Binding="{Binding DisplayName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
-                                <DataGridTemplateColumn Header="Google Drive Link" Width="2*">
+                                <DataGridTemplateColumn Header="{DynamicResource LOCFastInstall_Settings_GD_Column_Link}" Width="2*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <DockPanel>
-                                                <Button Content="Test" 
+                                                <Button Content="{DynamicResource LOCFastInstall_Settings_GD_Button_Test}" 
                                                         DockPanel.Dock="Right" 
                                                         Width="50" 
                                                         Margin="5,0,0,0"
@@ -277,7 +288,7 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn Header="Destination Path" Width="*">
+                                <DataGridTemplateColumn Header="{DynamicResource LOCFastInstall_Settings_GD_Column_DestinationPath}" Width="*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <DockPanel>
@@ -295,7 +306,7 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
 
-                                <DataGridTemplateColumn Header="Platform" Width="120">
+                                <DataGridTemplateColumn Header="{DynamicResource LOCFastInstall_Settings_Column_Platform}" Width="120">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
                                             <ComboBox ItemsSource="{Binding DataContext.AvailablePlatforms, RelativeSource={RelativeSource AncestorType=DataGrid}}"
@@ -309,11 +320,11 @@
 
                         <!-- Buttons -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
-                            <Button Content="➕ Add Cloud Source" 
+                            <Button Content="{DynamicResource LOCFastInstall_Settings_GD_Button_AddSource}" 
                                     Padding="15,8" 
                                     Margin="0,0,10,0"
                                     Command="{Binding AddCloudSourceCommand}"/>
-                            <Button Content="🗑 Remove Selected" 
+                            <Button Content="{DynamicResource LOCFastInstall_Settings_Button_RemoveSelected}" 
                                     Padding="15,8"
                                     Command="{Binding RemoveCloudSourceCommand}"/>
                         </StackPanel>
@@ -321,17 +332,17 @@
                         <!-- Help Box -->
                         <Border Background="#20808080" CornerRadius="5" Padding="15">
                             <StackPanel>
-                                <TextBlock Text="📚 How Google Drive Integration Works" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
+                                <TextBlock Text="{DynamicResource LOCFastInstall_Settings_GD_Help_Title}" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
                                 
-                                <TextBlock Text="Link Types:" FontWeight="Bold" Margin="0,0,0,5"/>
+                                <TextBlock Text="{DynamicResource LOCFastInstall_Settings_GD_Help_LinkTypes_Title}" FontWeight="Bold" Margin="0,0,0,5"/>
                                 <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.9" Margin="0,0,0,5">
-                                    • Direct File Links: Links to a single file (game or archive). No API key needed.
+                                    <Run Text="{DynamicResource LOCFastInstall_Settings_GD_Help_LinkTypes_Direct}"/>
                                 </TextBlock>
                                 <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.9" Margin="0,0,0,10">
-                                    • Shared Folder Links: Links to a folder containing multiple games. Requires API key to list contents.
+                                    <Run Text="{DynamicResource LOCFastInstall_Settings_GD_Help_LinkTypes_Folder}"/>
                                 </TextBlock>
 
-                                <TextBlock Text="Supported Link Formats:" FontWeight="Bold" Margin="0,0,0,5"/>
+                                <TextBlock Text="{DynamicResource LOCFastInstall_Settings_GD_Help_SupportedFormats_Title}" FontWeight="Bold" Margin="0,0,0,5"/>
                                 <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.8" FontFamily="Consolas" Margin="0,0,0,5">
                                     https://drive.google.com/file/d/FILE_ID/view
                                 </TextBlock>
@@ -342,9 +353,9 @@
                                     https://drive.google.com/open?id=FILE_ID
                                 </TextBlock>
 
-                                <TextBlock Text="Archive Support:" FontWeight="Bold" Margin="0,0,0,5"/>
+                                <TextBlock Text="{DynamicResource LOCFastInstall_Settings_GD_Help_ArchiveSupport_Title}" FontWeight="Bold" Margin="0,0,0,5"/>
                                 <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.9">
-                                    ZIP, RAR, and 7Z archives are automatically extracted after download. Make sure 7-Zip is configured in the Local Sources tab.
+                                    <Run Text="{DynamicResource LOCFastInstall_Settings_GD_Help_ArchiveSupport_Text}"/>
                                 </TextBlock>
                             </StackPanel>
                         </Border>
@@ -353,7 +364,7 @@
             </TabItem>
 
             <!-- TAB 3: About -->
-            <TabItem Header="ℹ️ About">
+            <TabItem Header="{DynamicResource LOCFastInstall_Settings_Tab_About}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="15">
                     <StackPanel>
                         <TextBlock Text="FastInstall" 
@@ -361,19 +372,19 @@
                                    FontWeight="Bold"
                                    Margin="0,0,0,5"/>
                         
-                        <TextBlock Text="{Binding PluginVersionDisplay, StringFormat=Version {0}}"
+                        <TextBlock Text="{Binding PluginVersionText}"
                                    FontSize="14"
                                    Foreground="LimeGreen"
                                    FontWeight="Bold"
                                    Margin="0,0,0,20"/>
 
-                        <TextBlock Text="A Playnite extension to manage games stored on slow archival HDDs and install them by copying to fast SSDs."
+                        <TextBlock Text="{DynamicResource LOCFastInstall_About_Description}"
                                    TextWrapping="Wrap" 
                                    Margin="0,0,0,20"
                                    Opacity="0.9"/>
 
                         <!-- Download Manager Button -->
-                        <Button Content="📥 Open Download Manager" 
+                        <Button Content="{DynamicResource LOCFastInstall_About_Button_OpenDownloadManager}" 
                                 HorizontalAlignment="Left"
                                 Padding="20,10"
                                 Margin="0,0,0,20"
@@ -385,20 +396,20 @@
 
                         <Border Background="#20808080" CornerRadius="5" Padding="15" Margin="0,0,0,15">
                             <StackPanel>
-                                <TextBlock Text="Features" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
-                                <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.9" Margin="0,0,0,3">• Multi-source configuration for different platforms</TextBlock>
-                                <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.9" Margin="0,0,0,3">• Background installation with progress tracking</TextBlock>
-                                <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.9" Margin="0,0,0,3">• Download queue with pause/resume support</TextBlock>
-                                <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.9" Margin="0,0,0,3">• Archive extraction (ZIP, RAR, 7Z)</TextBlock>
-                                <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.9" Margin="0,0,0,3">• Google Drive cloud download</TextBlock>
-                                <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.9" Margin="0,0,0,3">• Emulator integration</TextBlock>
-                                <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.9">• Disk space verification</TextBlock>
+                                <TextBlock Text="{DynamicResource LOCFastInstall_About_Features_Title}" FontWeight="Bold" FontSize="14" Margin="0,0,0,10"/>
+                                <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.9" Margin="0,0,0,3"><Run Text="{DynamicResource LOCFastInstall_About_Feature_1}"/></TextBlock>
+                                <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.9" Margin="0,0,0,3"><Run Text="{DynamicResource LOCFastInstall_About_Feature_2}"/></TextBlock>
+                                <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.9" Margin="0,0,0,3"><Run Text="{DynamicResource LOCFastInstall_About_Feature_3}"/></TextBlock>
+                                <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.9" Margin="0,0,0,3"><Run Text="{DynamicResource LOCFastInstall_About_Feature_4}"/></TextBlock>
+                                <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.9" Margin="0,0,0,3"><Run Text="{DynamicResource LOCFastInstall_About_Feature_5}"/></TextBlock>
+                                <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.9" Margin="0,0,0,3"><Run Text="{DynamicResource LOCFastInstall_About_Feature_6}"/></TextBlock>
+                                <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.9"><Run Text="{DynamicResource LOCFastInstall_About_Feature_7}"/></TextBlock>
                             </StackPanel>
                         </Border>
 
                         <Border Background="#20808080" CornerRadius="5" Padding="15">
                             <StackPanel>
-                                <TextBlock Text="Author" FontWeight="Bold" FontSize="14" Margin="0,0,0,5"/>
+                                <TextBlock Text="{DynamicResource LOCFastInstall_About_Author_Title}" FontWeight="Bold" FontSize="14" Margin="0,0,0,5"/>
                                 <TextBlock Text="sassoanarchico" FontSize="12" Opacity="0.9"/>
                             </StackPanel>
                         </Border>

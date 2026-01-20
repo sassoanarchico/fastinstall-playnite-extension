@@ -1,0 +1,373 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+  <!-- Settings - Tabs -->
+  <sys:String x:Key="LOCFastInstall_Settings_Tab_LocalSources">📁 Sorgenti locali</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_Tab_GoogleDrive">☁️ Google Drive</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_Tab_About">ℹ️ Info</sys:String>
+
+  <!-- Settings - Local Sources -->
+  <sys:String x:Key="LOCFastInstall_Settings_Local_Title">Configurazioni cartelle locali</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_Local_Description">Configura coppie di cartelle sorgente e destinazione. I giochi verranno rilevati nelle cartelle sorgenti e potranno essere installati nelle cartelle di destinazione.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_Column_Enabled">✓</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_Column_SourcePath">Percorso sorgente (HDD archivio)</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_Column_DestinationPath">Percorso destinazione (SSD veloce)</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_Column_Platform">Piattaforma</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_Column_Emulator">Emulatore</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_Column_Profile">Profilo</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_Button_AddConfig">➕ Aggiungi configurazione</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_Button_RemoveSelected">🗑 Rimuovi selezionata</sys:String>
+
+  <!-- Settings - General -->
+  <sys:String x:Key="LOCFastInstall_Settings_General_Title">Impostazioni generali</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_EnableParallel">Abilita download paralleli</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_MaxParallel_Label">Massimo paralleli: </sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_MaxParallel_Hint">(1-10)</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_ConflictResolution_Label">Gestione conflitti: </sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_SevenZipPath_Label">Percorso 7-Zip: </sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_Button_Browse">Sfoglia...</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_Button_Download7Zip">Scarica 7-Zip</sys:String>
+
+  <!-- Settings - Info -->
+  <sys:String x:Key="LOCFastInstall_Settings_SupportedPlatforms_Title">Piattaforme supportate:</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_SupportedPlatforms_Text">PC • PlayStation 3 (RPCS3) • PlayStation 2 (PCSX2) • PSP (PPSSPP) • Nintendo Switch (Ryujinx/Yuzu) • Wii U (Cemu) • Wii/GameCube (Dolphin) • Nintendo DS (MelonDS/DeSmuME) • Xbox 360 (Xenia)</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_ConfigureEmulators_Title">Configura emulatori:</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_ConfigureEmulators_Text">Vai su Playnite → Impostazioni → Emulazione per aggiungere o configurare emulatori.</sys:String>
+
+  <!-- Settings - Google Drive -->
+  <sys:String x:Key="LOCFastInstall_Settings_GD_Title">Integrazione Google Drive</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_GD_Description">Scarica i giochi direttamente da Google Drive. Puoi aggiungere link a singoli file o a cartelle condivise.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_GD_ApiKey_Title">🔑 Configurazione API Key</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_GD_ApiKey_Description">La API Key è opzionale per i link diretti a file, ma necessaria per elencare il contenuto delle cartelle condivise.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_GD_ApiKey_Label">Google Drive API Key: </sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_GD_Button_HowToApiKey">📖 Come ottenere una API Key</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_GD_CloudSources_Title">Sorgenti cloud</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_GD_Column_Name">Nome</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_GD_Column_Link">Link Google Drive</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_GD_Column_DestinationPath">Percorso destinazione</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_GD_Button_Test">Test</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_GD_Button_AddSource">➕ Aggiungi sorgente cloud</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_GD_Help_Title">📚 Come funziona l’integrazione con Google Drive</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_GD_Help_LinkTypes_Title">Tipi di link:</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_GD_Help_LinkTypes_Direct">• Link diretto a file: link a un singolo file (gioco o archivio). Non serve API key.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_GD_Help_LinkTypes_Folder">• Link a cartella condivisa: link a una cartella con più giochi. Richiede API key per elencare il contenuto.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_GD_Help_SupportedFormats_Title">Formati link supportati:</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_GD_Help_ArchiveSupport_Title">Supporto archivi:</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_GD_Help_ArchiveSupport_Text">Gli archivi ZIP, RAR e 7Z vengono estratti automaticamente dopo il download. Assicurati che 7-Zip sia configurato nella scheda “Sorgenti locali”.</sys:String>
+
+  <!-- About -->
+  <sys:String x:Key="LOCFastInstall_About_Description">Un’estensione Playnite per gestire giochi conservati su un HDD lento e installarli copiandoli su un SSD veloce.</sys:String>
+  <sys:String x:Key="LOCFastInstall_About_Button_OpenDownloadManager">📥 Apri Download Manager</sys:String>
+  <sys:String x:Key="LOCFastInstall_About_Features_Title">Funzionalità</sys:String>
+  <sys:String x:Key="LOCFastInstall_About_Feature_1">• Configurazione multi-sorgente per piattaforme diverse</sys:String>
+  <sys:String x:Key="LOCFastInstall_About_Feature_2">• Installazione in background con tracciamento del progresso</sys:String>
+  <sys:String x:Key="LOCFastInstall_About_Feature_3">• Coda download con supporto pausa/ripresa</sys:String>
+  <sys:String x:Key="LOCFastInstall_About_Feature_4">• Estrazione archivi (ZIP, RAR, 7Z)</sys:String>
+  <sys:String x:Key="LOCFastInstall_About_Feature_5">• Download cloud da Google Drive</sys:String>
+  <sys:String x:Key="LOCFastInstall_About_Feature_6">• Integrazione emulatori</sys:String>
+  <sys:String x:Key="LOCFastInstall_About_Feature_7">• Verifica spazio su disco</sys:String>
+  <sys:String x:Key="LOCFastInstall_About_Author_Title">Autore</sys:String>
+  <sys:String x:Key="LOCFastInstall_About_VersionFormat">Versione {0}</sys:String>
+
+  <!-- Download Manager Window -->
+  <sys:String x:Key="LOCFastInstall_DownloadManager_WindowTitle">FastInstall - Download Manager</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Title">Download Manager</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_NoActive">Nessun download attivo</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_NotInitialized">Download manager non inizializzato</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_StatusFormat">{0} in installazione, {1} in coda, {2} in pausa</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Col_Game">Gioco</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Col_Priority">Priorità</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Col_Status">Stato</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Col_Progress">Progresso</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Col_Speed">Velocità</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Col_Actions">Azioni</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Button_Pause">Pausa</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Button_Resume">Riprendi</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Button_Cancel">Annulla</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Button_Refresh">Aggiorna</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Button_Close">Chiudi</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Priority_Low">Bassa</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Priority_Normal">Normale</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Priority_High">Alta</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Status_Queued">In coda</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Status_Installing">In installazione</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Status_Paused">In pausa</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Status_Completed">Completato</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Status_Failed">Fallito</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Status_Cancelled">Annullato</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Status_Unknown">Sconosciuto</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Progress_InProgress">In corso</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_Speed_Active">Attivo</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_ConfirmCancel_Message">Vuoi davvero annullare questa installazione?</sys:String>
+  <sys:String x:Key="LOCFastInstall_DownloadManager_ConfirmCancel_Title">Annulla installazione</sys:String>
+
+  <!-- Installation Progress Window -->
+  <sys:String x:Key="LOCFastInstall_Progress_WindowTitle">FastInstall - Avanzamento installazione</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Label_Installing">Installazione:</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Label_Progress">Progresso: </sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Label_Speed">Velocità: </sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Label_Files">File: </sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Label_Elapsed">Trascorso: </sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Label_Remaining">Rimanente: </sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Label_CurrentFile">File corrente:</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Status_PreparingQueued">In coda per l’installazione...</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Status_PreparingCopy">Preparazione copia file...</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Status_Copying">Copia dei file...</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Status_Preparing">Preparazione...</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Button_Minimize">Riduci</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Button_Pause">Pausa</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Button_Resume">Riprendi</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Button_Cancel">Annulla</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Button_Close">Chiudi</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Status_Completed">Installazione completata con successo!</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Status_AllFilesCopied">Tutti i file copiati</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Status_ErrorFormat">Errore: {0}</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Status_Cancelled">Installazione annullata</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Status_CancelledCleaningUp">Installazione annullata. Pulizia in corso...</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Status_Pausing">Pausa installazione...</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_Status_Resuming">Ripresa installazione...</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_ConfirmCancel_Message">Vuoi davvero annullare l’installazione?\n\nI file copiati parzialmente verranno eliminati.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_ConfirmCancel_Title">Annulla installazione</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_ClosingInProgress_Message">L’installazione è ancora in corso.\n\nVuoi annullare e chiudere?</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_ClosingInProgress_Title">Installazione in corso</sys:String>
+
+  <!-- Generic Titles / Buttons -->
+  <sys:String x:Key="LOCFastInstall_Title_Error">Errore FastInstall</sys:String>
+  <sys:String x:Key="LOCFastInstall_Title_Info">FastInstall</sys:String>
+  <sys:String x:Key="LOCFastInstall_Title_Warning">FastInstall</sys:String>
+  <sys:String x:Key="LOCFastInstall_Button_Yes">Sì</sys:String>
+  <sys:String x:Key="LOCFastInstall_Button_No">No</sys:String>
+
+  <!-- Conflict resolution display -->
+  <sys:String x:Key="LOCFastInstall_Conflict_Ask">Chiedi</sys:String>
+  <sys:String x:Key="LOCFastInstall_Conflict_Overwrite">Sovrascrivi</sys:String>
+  <sys:String x:Key="LOCFastInstall_Conflict_Skip">Salta</sys:String>
+
+  <!-- Settings View - Misc -->
+  <sys:String x:Key="LOCFastInstall_Settings_Select7Zip_Filter">Eseguibile 7-Zip|7z.exe;7za.exe;7zFM.exe|Tutti i file|*.*</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_ErrorOpenBrowser_Format">Errore nell’apertura del browser:\n{0}\n\nVisita: https://www.7-zip.org/download.html</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_Download7Zip_Title">FastInstall - Scarica 7-Zip</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_ApiKeyHelp_Title">Come ottenere una Google Drive API Key</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_ApiKeyHelp_ConfirmOpenConsole">Vuoi aprire Google Cloud Console adesso?</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_ApiKeyHelp_Message" xml:space="preserve">Come ottenere una Google Drive API Key:
+
+1. Vai su Google Cloud Console:
+   https://console.cloud.google.com/
+
+2. Crea un nuovo progetto (oppure selezionane uno esistente)
+
+3. Abilita la Google Drive API:
+   - Vai su 'API e servizi' → 'Libreria'
+   - Cerca 'Google Drive API'
+   - Clicca 'Abilita'
+
+4. Crea le credenziali:
+   - Vai su 'API e servizi' → 'Credenziali'
+   - Clicca 'Crea credenziali' → 'Chiave API'
+   - Copia la chiave generata
+
+5. (Opzionale) Limita la chiave API:
+   - Clicca sulla chiave per modificarla
+   - In 'Restrizioni API', seleziona 'Google Drive API'
+   - Migliora la sicurezza
+
+Nota: la API key è GRATUITA e non richiede fatturazione.
+Serve solo per elencare il contenuto delle cartelle condivise.
+I link diretti ai file funzionano senza API key.
+</sys:String>
+
+  <!-- Common UI strings used in code -->
+  <sys:String x:Key="LOCFastInstall_Common_NoneAutoDetect">(Nessuno / Auto-rileva)</sys:String>
+  <sys:String x:Key="LOCFastInstall_Common_DefaultAuto">(Predefinito / Auto)</sys:String>
+  <sys:String x:Key="LOCFastInstall_Common_Unknown">Sconosciuto</sys:String>
+
+  <!-- Settings validation -->
+  <sys:String x:Key="LOCFastInstall_Settings_Verify_EnabledLocalNeedSource">Le configurazioni locali abilitate devono avere un percorso sorgente.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_Verify_SourceDirMissingFormat">La cartella sorgente non esiste: {0}</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_Verify_EnabledLocalNeedDestination">Le configurazioni locali abilitate devono avere un percorso di destinazione.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_Verify_EnabledCloudNeedLink">Le sorgenti cloud abilitate devono avere un link Google Drive.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Settings_Verify_EnabledCloudNeedDestination">Le sorgenti cloud abilitate devono avere un percorso di destinazione.</sys:String>
+
+  <!-- Menu action names -->
+  <sys:String x:Key="LOCFastInstall_Action_InstallFromArchive">Installa da archivio</sys:String>
+  <sys:String x:Key="LOCFastInstall_Action_DownloadFromCloud">Scarica dal cloud</sys:String>
+  <sys:String x:Key="LOCFastInstall_Action_RemoveFromSsd">Rimuovi da SSD</sys:String>
+
+  <!-- Play action names -->
+  <sys:String x:Key="LOCFastInstall_Play_PlayWithRpcs3">Avvia con RPCS3</sys:String>
+  <sys:String x:Key="LOCFastInstall_Play_PlayWithRyujinxYuzu">Avvia con Ryujinx/Yuzu</sys:String>
+  <sys:String x:Key="LOCFastInstall_Play_PlayWithCemu">Avvia con Cemu</sys:String>
+  <sys:String x:Key="LOCFastInstall_Play_PlayWithDolphin">Avvia con Dolphin</sys:String>
+  <sys:String x:Key="LOCFastInstall_Play_PlayWithXenia">Avvia con Xenia</sys:String>
+  <sys:String x:Key="LOCFastInstall_Play_PlayWithPpsspp">Avvia con PPSSPP</sys:String>
+  <sys:String x:Key="LOCFastInstall_Play_PlayWithMelonDsDesmume">Avvia con MelonDS/DeSmuME</sys:String>
+  <sys:String x:Key="LOCFastInstall_Play_Play">Avvia</sys:String>
+
+  <!-- Background / Cloud status strings -->
+  <sys:String x:Key="LOCFastInstall_Status_ExtractingArchive">Estrazione archivio...</sys:String>
+  <sys:String x:Key="LOCFastInstall_Status_IntegrityCheck">Verifica integrità file...</sys:String>
+  <sys:String x:Key="LOCFastInstall_Status_InstallationPaused">Installazione in pausa</sys:String>
+  <sys:String x:Key="LOCFastInstall_Status_InstallationCancelled">Installazione annullata</sys:String>
+  <sys:String x:Key="LOCFastInstall_Status_ResumingInstallation">Ripresa installazione...</sys:String>
+  <sys:String x:Key="LOCFastInstall_Status_ConnectingGoogleDrive">Connessione a Google Drive...</sys:String>
+  <sys:String x:Key="LOCFastInstall_Status_DownloadingGoogleDrive">Download da Google Drive...</sys:String>
+  <sys:String x:Key="LOCFastInstall_Status_CopyingToDestination">Copia in destinazione...</sys:String>
+
+  <!-- Disk space warning -->
+  <sys:String x:Key="LOCFastInstall_DiskSpace_WarningTitle">FastInstall - Spazio su disco insufficiente</sys:String>
+  <sys:String x:Key="LOCFastInstall_DiskSpace_WarningMessageFormat">Spazio su disco insufficiente!\n\nGioco: {0}\nSpazio richiesto: {1}\nSpazio disponibile: {2}\nSpazio mancante: {3}\n\nVuoi continuare comunque? L’installazione potrebbe fallire.</sys:String>
+  <sys:String x:Key="LOCFastInstall_DiskSpace_CancelledMessage">Installazione annullata: spazio su disco insufficiente</sys:String>
+  <sys:String x:Key="LOCFastInstall_Notification_InsufficientSpaceFormat">Installazione di '{0}' annullata: spazio su disco insufficiente</sys:String>
+
+  <!-- Notifications -->
+  <sys:String x:Key="LOCFastInstall_Notification_CleanupStarting">FastInstall: Pulizia installazione annullata...</sys:String>
+  <sys:String x:Key="LOCFastInstall_Notification_CleanupFailedFormat">FastInstall: impossibile eliminare '{0}'. Potresti doverlo cancellare manualmente.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Notification_IntegrityFailedFormat">Verifica integrità fallita per '{0}'. Alcuni file potrebbero essere corrotti.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Notification_InstallCompletedFormat">Installazione del gioco {0} completata</sys:String>
+  <sys:String x:Key="LOCFastInstall_Notification_InstallCompletedWithIntegrityErrorsFormat">Installazione del gioco {0} completata con errori di integrità</sys:String>
+  <sys:String x:Key="LOCFastInstall_Notification_CloudCompletedFormat">Download completato: {0}</sys:String>
+  <sys:String x:Key="LOCFastInstall_Notification_CloudFailedFormat">Download fallito: {0} - {1}</sys:String>
+
+  <!-- FastInstallClient (dialogs/notifications) -->
+  <sys:String x:Key="LOCFastInstall_DialogTitle_AlreadyInstalled">FastInstall - Già installato</sys:String>
+  <sys:String x:Key="LOCFastInstall_DialogTitle_InstallConflict">FastInstall - Conflitto installazione</sys:String>
+  <sys:String x:Key="LOCFastInstall_DialogTitle_SafetyError">FastInstall - Errore di sicurezza</sys:String>
+  <sys:String x:Key="LOCFastInstall_DialogTitle_ConfirmUninstall">FastInstall - Conferma disinstallazione</sys:String>
+  <sys:String x:Key="LOCFastInstall_DialogTitle_AccessDenied">FastInstall - Accesso negato</sys:String>
+  <sys:String x:Key="LOCFastInstall_DialogTitle_DeleteError">FastInstall - Errore eliminazione</sys:String>
+  <sys:String x:Key="LOCFastInstall_DialogTitle_LaunchError">FastInstall - Errore avvio</sys:String>
+  <sys:String x:Key="LOCFastInstall_DialogTitle_EmulatorNotConfigured">FastInstall - Emulatore non configurato</sys:String>
+  <sys:String x:Key="LOCFastInstall_DialogTitle_EmulatorError">FastInstall - Errore emulatore</sys:String>
+  <sys:String x:Key="LOCFastInstall_DialogTitle_ExecutableNotFound">FastInstall - Eseguibile non trovato</sys:String>
+  <sys:String x:Key="LOCFastInstall_DialogTitle_GameFileNotFound">FastInstall - File di gioco non trovato</sys:String>
+
+  <sys:String x:Key="LOCFastInstall_Error_SourceArchiveNotConfigured">La cartella sorgente (archivio) non è configurata.\nControlla le impostazioni di FastInstall.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_FastInstallDirNotConfigured">La cartella di installazione veloce non è configurata.\nControlla le impostazioni di FastInstall.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_SourceFolderNotFoundFormat">Cartella sorgente non trovata:\n{0}\n\nIl gioco potrebbe essere stato spostato o eliminato.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Message_AlreadyInstalledFormat">'{0}' è già installato in:\n{1}\n\nInstallazione saltata.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Message_OverwriteConfirmFormat">'{0}' è già installato in:\n{1}\n\nVuoi sovrascrivere l’installazione esistente?</sys:String>
+  <sys:String x:Key="LOCFastInstall_Notification_SpaceInfoFormat">'{0}': Richiesto: {1}, Disponibile: {2}</sys:String>
+
+  <sys:String x:Key="LOCFastInstall_Error_CloudSourceNotFound">Configurazione sorgente cloud non trovata.\nControlla le impostazioni di FastInstall.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_CloudDestinationNotConfigured">Il percorso di destinazione non è configurato per questa sorgente cloud.\nControlla le impostazioni di FastInstall.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_CloudProviderNotAvailableFormat">Il provider cloud {0} non è disponibile.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_InvalidCloudLinkFormat">Link cloud non valido: {0}</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_CouldNotDetermineFileId">Impossibile determinare l’ID del file per il download.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_CloudDownloadManagerNotInitialized">CloudDownloadManager non è inizializzato.\n\nRiavvia Playnite e riprova.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_StartDownloadFormat">Errore durante l’avvio del download:\n\n{0}\n\nID file: {1}\nDestinazione: {2}</sys:String>
+
+  <sys:String x:Key="LOCFastInstall_Error_CouldNotDetermineInstallPath">Impossibile determinare il percorso di installazione per la disinstallazione.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_SafetyCheckFailedFormat">Controllo di sicurezza fallito: verrà eliminato solo dalla cartella FastInstall.\n\nIl percorso '{0}' non è dentro '{1}'.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Message_ConfirmUninstallFormat">Vuoi davvero rimuovere '{0}' dall’SSD?\n\nQuesto eliminerà {1} da:\n{2}\n\nL’archivio originale NON verrà modificato.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_RemovingFormat">Rimozione {0} ({1})...</sys:String>
+  <sys:String x:Key="LOCFastInstall_Progress_RemovingTitleFormat">Rimozione {0}...</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_PermissionDeniedUninstallFormat">Permesso negato durante la disinstallazione di '{0}'.\n\nAlcuni file potrebbero essere in uso. Chiudi eventuali programmi che usano file in questa cartella.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_CouldNotDeleteFormat">Impossibile eliminare '{0}':\n\n{1}\n\nAlcuni file potrebbero essere in uso.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_UninstallGenericFormat">Errore durante la disinstallazione di '{0}':\n\n{1}</sys:String>
+
+  <sys:String x:Key="LOCFastInstall_Error_LaunchGenericFormat">Errore nell’avvio di '{0}':\n\n{1}</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_Rpcs3NotConfigured">Emulatore RPCS3 non configurato.\n\nConfigura un emulatore:\n1. Vai su Playnite → Impostazioni → Emulazione\n2. Aggiungi l’emulatore RPCS3\n3. Torna nelle impostazioni di FastInstall e seleziona RPCS3 dal menu Emulatore</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_EmulatorExeNotFoundFormat">Impossibile trovare l’eseguibile dell’emulatore '{0}'{1}.\n\nCartella installazione: {2}\n\nVerifica che l’emulatore sia installato e configurato correttamente in Playnite.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_LaunchWithEmulatorFormat">Errore nell’avvio con '{0}':\n\n{1}</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_GameExeNotFoundFormat">Impossibile trovare l’eseguibile del gioco per '{0}'.\n\nVerifica che i file del gioco siano presenti nella cartella di installazione.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_GameFileNotFoundFormat">Impossibile trovare il file di gioco per '{0}' ({1}).\n\nPiattaforma: {2}\nConfigura l’emulatore appropriato in Playnite o imposta una play action personalizzata.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_NoDefaultProgramFormat">Impossibile avviare '{0}'.\n\nNessun programma predefinito è associato ai file {1}.\n\nInstalla l’emulatore appropriato e impostalo come programma predefinito, oppure configura una play action personalizzata.</sys:String>
+
+  <!-- BackgroundInstallManager / generic errors -->
+  <sys:String x:Key="LOCFastInstall_DialogTitle_InstallationInProgress">Installazione in corso</sys:String>
+  <sys:String x:Key="LOCFastInstall_Message_AlreadyInstallingFormat">'{0}' è già in installazione.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_SevenZipNotConfigured">Il percorso di 7-Zip non è configurato. Impostalo nelle impostazioni di FastInstall.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_ArchiveExtractionFailedOrCancelled">Estrazione archivio fallita o annullata.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Notification_InstallFailedFormat">Installazione fallita per '{0}': {1}</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_NotEnoughDiskSpace">Spazio su disco insufficiente</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_IoErrorFormat">Errore IO: {0}</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_PermissionDenied">Permesso negato - controlla i permessi della cartella</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_SourceFolderNotFound">Cartella sorgente non trovata</sys:String>
+  <sys:String x:Key="LOCFastInstall_Common_NotConfigured">(non configurato)</sys:String>
+  <sys:String x:Key="LOCFastInstall_Common_ProfileSuffixFormat"> (Profilo: {0})</sys:String>
+
+  <!-- CloudDownloadManager -->
+  <sys:String x:Key="LOCFastInstall_Status_DownloadPaused">Download in pausa</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_DownloadReturnedFailure">Il download ha restituito errore. Controlla i log di Playnite per i dettagli.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_DownloadedFileNotFound">File scaricato non trovato nel percorso temporaneo. Il download potrebbe essere fallito senza errori visibili.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_DownloadedFileEmpty">Il file scaricato è vuoto. Il file potrebbe non essere condiviso pubblicamente.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_ArchiveExtractionFailed">Estrazione archivio fallita</sys:String>
+
+  <!-- FastInstallPlugin notifications -->
+  <sys:String x:Key="LOCFastInstall_Notification_CleanupFixedFormat">FastInstall: corretti {0} giochi con configurazioni emulatore obsolete.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Notification_ScanErrorFormat">FastInstall: errore durante la scansione di '{0}': {1}</sys:String>
+
+  <!-- Cloud test connection (settings) -->
+  <sys:String x:Key="LOCFastInstall_CloudTest_Title_TestConnection">Test connessione</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_EnterLinkFirst">Inserisci prima un link cloud.</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_ProviderNotAvailable_Title">Test connessione</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_ProviderNotAvailable_Message">Provider cloud non disponibile.\n\nAssicurati di aver riavviato Playnite dopo aver installato l’estensione.</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_InvalidLink_Title">Link non valido</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_InvalidLink_MessageFormat" xml:space="preserve">Formato link non valido.
+
+{0}
+
+Formati supportati:
+• https://drive.google.com/file/d/FILE_ID/view
+• https://drive.google.com/drive/folders/FOLDER_ID
+• https://drive.google.com/open?id=FILE_ID</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_ApiKeyRequired_Title">API Key richiesta</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_ApiKeyRequired_Message">Sembra un link a una cartella.\n\nPer elencare il contenuto della cartella devi configurare una Google Drive API Key.\n\nUsa il pulsante 'Come ottenere una API Key' per le istruzioni.</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_FolderEmpty_Title">Nessun file trovato</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_FolderEmpty_Message">La cartella è vuota o non è accessibile.\n\nAssicurati che:\n• La cartella sia condivisa pubblicamente (Chiunque abbia il link)\n• La API key sia valida e abbia Google Drive API abilitata</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_FolderContents_Title">Contenuto cartella</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_FolderContents_HeaderFormat">Trovati {0} elementi nella cartella:</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_FolderContents_MoreItemsFormat">... e altri {0} elementi</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_FolderContents_TotalSizeFormat">Dimensione totale: {0}</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_DefaultFolderNameFormat">Cartella Google Drive ({0} elementi)</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_ConnectionSuccessful_Title">Connessione riuscita</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_FileFound_MessageFormat">✅ File trovato!\n\nNome: {0}\nDimensione: {1}\nTipo: {2}\n\nQuesto file può essere scaricato senza API key.</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_LinkValid_Title">Link valido</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_LinkValid_MessageFormat">Link analizzato correttamente.\n\nID file: {0}\n\nNota: impossibile ottenere i dettagli del file (API key non impostata o file privato).\nIl download potrebbe comunque funzionare se il file è condiviso pubblicamente.</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_TestFailed_Title">Test fallito</sys:String>
+  <sys:String x:Key="LOCFastInstall_CloudTest_TestFailed_MessageFormat">Errore durante il test della connessione:\n\n{0}\n\nAssicurati che:\n• Il link sia condiviso pubblicamente\n• La API key sia corretta (per le cartelle)\n• Ci sia connessione internet</sys:String>
+
+  <!-- Play notifications -->
+  <sys:String x:Key="LOCFastInstall_Notification_PlayingFormat">'{0}' è ora in esecuzione.\nPotrebbe essere necessario fermare manualmente il gioco in Playnite quando hai finito.</sys:String>
+
+  <!-- GoogleDriveProvider -->
+  <sys:String x:Key="LOCFastInstall_GD_Parse_UrlEmpty">L’URL è vuoto</sys:String>
+  <sys:String x:Key="LOCFastInstall_GD_Parse_InvalidUrlFormat">Formato URL di Google Drive non valido</sys:String>
+  <sys:String x:Key="LOCFastInstall_GD_Error_ApiKeyNotConfigured">La API key non è configurata. Imposta la Google Drive API key nelle impostazioni.</sys:String>
+  <sys:String x:Key="LOCFastInstall_GD_Error_ApiErrorFormat">Errore Google Drive API: {0}</sys:String>
+  <sys:String x:Key="LOCFastInstall_GD_Error_NetworkErrorFormat">Errore di rete: {0}. Controlla la connessione internet.</sys:String>
+  <sys:String x:Key="LOCFastInstall_GD_Error_FileNotFound">File non trovato. Assicurati che esista e che sia condiviso pubblicamente.</sys:String>
+  <sys:String x:Key="LOCFastInstall_GD_Error_AccessDenied">Accesso negato. Assicurati che il file sia condiviso come 'Chiunque abbia il link'.</sys:String>
+  <sys:String x:Key="LOCFastInstall_GD_Error_DownloadFailedHttpFormat">Download fallito con HTTP {0}: {1}</sys:String>
+  <sys:String x:Key="LOCFastInstall_GD_Error_LargeFileConfirmFailed">Impossibile gestire la conferma per il download di file grande. Il file potrebbe essere troppo grande o richiedere un download manuale.</sys:String>
+  <sys:String x:Key="LOCFastInstall_GD_Error_FileNotFoundOnDrive">File non trovato su Google Drive. Verifica che esista ancora.</sys:String>
+  <sys:String x:Key="LOCFastInstall_GD_Error_UnexpectedResponseFormat">Risposta inattesa da Google Drive. Il file potrebbe non essere condiviso pubblicamente.\n\nRisposta: {0}</sys:String>
+  <sys:String x:Key="LOCFastInstall_GD_Error_StillWarningPage">Impossibile scaricare il file. Google Drive mostra ancora una pagina di avviso. Il file potrebbe richiedere un download manuale dal browser.</sys:String>
+
+  <!-- Misc internal errors surfaced to UI -->
+  <sys:String x:Key="LOCFastInstall_Error_ProviderNotFoundFormat">Provider {0} non trovato. Assicurati che il plugin sia inizializzato correttamente.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_7ZipStartFailed">Impossibile avviare il processo di 7-Zip</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_ArchiveExtractionFailedExitCodeFormat">Estrazione archivio fallita. Codice di uscita: {0}</sys:String>
+  <sys:String x:Key="LOCFastInstall_IntegrityCheck_CancelledByUser">Verifica integrità annullata dall’utente</sys:String>
+
+  <!-- ArchiveHelper -->
+  <sys:String x:Key="LOCFastInstall_Error_7ZipExeNotFound">Eseguibile di 7-Zip non trovato. Configura il percorso di 7-Zip nelle impostazioni.</sys:String>
+  <sys:String x:Key="LOCFastInstall_Error_ArchiveFileNotFoundFormat">File archivio non trovato: {0}</sys:String>
+  <sys:String x:Key="LOCFastInstall_Archive_Progress_ExtractingFormat">Estrazione archivio: {0}...</sys:String>
+  <sys:String x:Key="LOCFastInstall_Archive_Progress_Completed">Estrazione completata.</sys:String>
+
+  <!-- FileCopyHelper integrity check -->
+  <sys:String x:Key="LOCFastInstall_Integrity_SourceDirMissingFormat">La cartella sorgente non esiste: {0}</sys:String>
+  <sys:String x:Key="LOCFastInstall_Integrity_DestinationDirMissingFormat">La cartella di destinazione non esiste: {0}</sys:String>
+  <sys:String x:Key="LOCFastInstall_Integrity_VerifyingAll">Verifica integrità file...</sys:String>
+  <sys:String x:Key="LOCFastInstall_Integrity_VerifyingFileFormat">Verifica: {0}</sys:String>
+
+  <!-- Integrity check detailed error -->
+  <sys:String x:Key="LOCFastInstall_Integrity_Error_HeaderFormat">Verifica integrità fallita per '{0}':</sys:String>
+  <sys:String x:Key="LOCFastInstall_Integrity_Error_MissingFilesFormat">File mancanti: {0}</sys:String>
+  <sys:String x:Key="LOCFastInstall_Integrity_Error_MissingFilesSampleFormat">Primi file mancanti: {0}</sys:String>
+  <sys:String x:Key="LOCFastInstall_Integrity_Error_MismatchedFilesFormat">File con dimensioni diverse: {0}</sys:String>
+  <sys:String x:Key="LOCFastInstall_Integrity_Error_MismatchedFilesSampleFormat">Primi file con problemi: {0}</sys:String>
+  <sys:String x:Key="LOCFastInstall_Integrity_Error_ShortFormat">Verifica integrità fallita: {0} file mancanti, {1} file con problemi</sys:String>
+</ResourceDictionary>
+

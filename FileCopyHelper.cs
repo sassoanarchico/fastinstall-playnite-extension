@@ -455,17 +455,17 @@ namespace FastInstall
             {
                 if (!Directory.Exists(sourcePath))
                 {
-                    result.ErrorMessage = $"Source directory does not exist: {sourcePath}";
+                    result.ErrorMessage = string.Format(ResourceProvider.GetString("LOCFastInstall_Integrity_SourceDirMissingFormat"), sourcePath);
                     return result;
                 }
 
                 if (!Directory.Exists(destinationPath))
                 {
-                    result.ErrorMessage = $"Destination directory does not exist: {destinationPath}";
+                    result.ErrorMessage = string.Format(ResourceProvider.GetString("LOCFastInstall_Integrity_DestinationDirMissingFormat"), destinationPath);
                     return result;
                 }
 
-                progressCallback?.Invoke("Verifica integrità file in corso...");
+                progressCallback?.Invoke(ResourceProvider.GetString("LOCFastInstall_Integrity_VerifyingAll"));
 
                 var sourceFiles = Directory.GetFiles(sourcePath, "*", SearchOption.AllDirectories).ToList();
                 result.TotalFiles = sourceFiles.Count;
@@ -474,14 +474,14 @@ namespace FastInstall
                 {
                     if (cancellationToken.IsCancellationRequested)
                     {
-                        result.ErrorMessage = "Verifica annullata dall'utente";
+                        result.ErrorMessage = ResourceProvider.GetString("LOCFastInstall_IntegrityCheck_CancelledByUser");
                         return result;
                     }
 
                     var relativePath = sourceFile.Substring(sourcePath.Length).TrimStart(Path.DirectorySeparatorChar);
                     var destFile = Path.Combine(destinationPath, relativePath);
 
-                    progressCallback?.Invoke($"Verifica: {relativePath}");
+                    progressCallback?.Invoke(string.Format(ResourceProvider.GetString("LOCFastInstall_Integrity_VerifyingFileFormat"), relativePath));
 
                     // Check if file exists
                     if (!File.Exists(destFile))

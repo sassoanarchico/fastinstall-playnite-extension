@@ -20,7 +20,7 @@ namespace FastInstall
         public FastInstallController(Game game, FastInstallPlugin plugin) : base(game)
         {
             this.plugin = plugin;
-            Name = "Install from Archive";
+            Name = ResourceProvider.GetString("LOCFastInstall_Action_InstallFromArchive");
         }
 
         public override void Install(InstallActionArgs args)
@@ -32,24 +32,25 @@ namespace FastInstall
             if (string.IsNullOrWhiteSpace(sourcePath))
             {
                 plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                    "Source Archive Directory is not configured.\nPlease check FastInstall settings.",
-                    "FastInstall Error");
+                    ResourceProvider.GetString("LOCFastInstall_Error_SourceArchiveNotConfigured"),
+                    ResourceProvider.GetString("LOCFastInstall_Title_Error"));
                 return;
             }
 
             if (string.IsNullOrWhiteSpace(destinationPath))
             {
                 plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                    "Fast Install Directory is not configured.\nPlease check FastInstall settings.",
-                    "FastInstall Error");
+                    ResourceProvider.GetString("LOCFastInstall_Error_FastInstallDirNotConfigured"),
+                    ResourceProvider.GetString("LOCFastInstall_Title_Error"));
                 return;
             }
 
             if (!Directory.Exists(sourcePath))
             {
+                var fmt = ResourceProvider.GetString("LOCFastInstall_Error_SourceFolderNotFoundFormat");
                 plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                    $"Source folder not found:\n{sourcePath}\n\nThe game may have been moved or deleted.",
-                    "FastInstall Error");
+                    string.Format(fmt, sourcePath),
+                    ResourceProvider.GetString("LOCFastInstall_Title_Error"));
                 return;
             }
 
@@ -60,19 +61,20 @@ namespace FastInstall
                 
                 if (conflictResolution == ConflictResolution.Skip)
                 {
+                    var fmt = ResourceProvider.GetString("LOCFastInstall_Message_AlreadyInstalledFormat");
                     plugin.PlayniteApi.Dialogs.ShowMessage(
-                        $"'{Game.Name}' is already installed at:\n{destinationPath}\n\nInstallation skipped.",
-                        "FastInstall - Already Installed",
+                        string.Format(fmt, Game.Name, destinationPath),
+                        ResourceProvider.GetString("LOCFastInstall_DialogTitle_AlreadyInstalled"),
                         MessageBoxButton.OK,
                         MessageBoxImage.Information);
                     return;
                 }
                 else if (conflictResolution == ConflictResolution.Ask)
                 {
+                    var fmt = ResourceProvider.GetString("LOCFastInstall_Message_OverwriteConfirmFormat");
                     var result = plugin.PlayniteApi.Dialogs.ShowMessage(
-                        $"'{Game.Name}' is already installed at:\n{destinationPath}\n\n" +
-                        "Do you want to overwrite the existing installation?",
-                        "FastInstall - Installation Conflict",
+                        string.Format(fmt, Game.Name, destinationPath),
+                        ResourceProvider.GetString("LOCFastInstall_DialogTitle_InstallConflict"),
                         MessageBoxButton.YesNo,
                         MessageBoxImage.Question);
                     
@@ -96,7 +98,7 @@ namespace FastInstall
             // Show space requirement notification
             plugin.PlayniteApi.Notifications.Add(new NotificationMessage(
                 $"FastInstall_SpaceInfo_{Game.Id}",
-                $"'{Game.Name}': Required: {requiredFormatted}, Available: {availableFormatted}",
+                string.Format(ResourceProvider.GetString("LOCFastInstall_Notification_SpaceInfoFormat"), Game.Name, requiredFormatted, availableFormatted),
                 NotificationType.Info));
 
             logger.Info($"FastInstall: Starting background installation for '{Game.Name}' (Required: {requiredFormatted}, Available: {availableFormatted})");
@@ -130,7 +132,7 @@ namespace FastInstall
         public CloudInstallController(Game game, FastInstallPlugin plugin) : base(game)
         {
             this.plugin = plugin;
-            Name = "Download from Cloud";
+            Name = ResourceProvider.GetString("LOCFastInstall_Action_DownloadFromCloud");
         }
 
         public override void Install(InstallActionArgs args)
@@ -140,8 +142,8 @@ namespace FastInstall
             if (cloudSource == null)
             {
                 plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                    "Cloud source configuration not found.\nPlease check FastInstall settings.",
-                    "FastInstall Error");
+                    ResourceProvider.GetString("LOCFastInstall_Error_CloudSourceNotFound"),
+                    ResourceProvider.GetString("LOCFastInstall_Title_Error"));
                 return;
             }
 
@@ -149,8 +151,8 @@ namespace FastInstall
             if (string.IsNullOrWhiteSpace(destinationPath))
             {
                 plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                    "Destination path is not configured for this cloud source.\nPlease check FastInstall settings.",
-                    "FastInstall Error");
+                    ResourceProvider.GetString("LOCFastInstall_Error_CloudDestinationNotConfigured"),
+                    ResourceProvider.GetString("LOCFastInstall_Title_Error"));
                 return;
             }
 
@@ -158,9 +160,10 @@ namespace FastInstall
             var provider = CloudDownloadManager.Instance?.GetProvider(cloudSource.Provider);
             if (provider == null)
             {
+                var fmt = ResourceProvider.GetString("LOCFastInstall_Error_CloudProviderNotAvailableFormat");
                 plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                    $"Cloud provider {cloudSource.Provider} is not available.",
-                    "FastInstall Error");
+                    string.Format(fmt, cloudSource.Provider),
+                    ResourceProvider.GetString("LOCFastInstall_Title_Error"));
                 return;
             }
 
@@ -173,9 +176,10 @@ namespace FastInstall
                 var parseResult = provider.ParseLink(cloudSource.CloudLink);
                 if (!parseResult.IsValid)
                 {
+                    var fmt = ResourceProvider.GetString("LOCFastInstall_Error_InvalidCloudLinkFormat");
                     plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                        $"Invalid cloud link: {parseResult.ErrorMessage}",
-                        "FastInstall Error");
+                        string.Format(fmt, parseResult.ErrorMessage),
+                        ResourceProvider.GetString("LOCFastInstall_Title_Error"));
                     return;
                 }
                 fileId = parseResult.FileId;
@@ -184,8 +188,8 @@ namespace FastInstall
             if (string.IsNullOrWhiteSpace(fileId))
             {
                 plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                    "Could not determine file ID for download.",
-                    "FastInstall Error");
+                    ResourceProvider.GetString("LOCFastInstall_Error_CouldNotDetermineFileId"),
+                    ResourceProvider.GetString("LOCFastInstall_Title_Error"));
                 return;
             }
 
@@ -215,19 +219,20 @@ namespace FastInstall
 
                 if (conflictResolution == ConflictResolution.Skip)
                 {
+                    var fmt = ResourceProvider.GetString("LOCFastInstall_Message_AlreadyInstalledFormat");
                     plugin.PlayniteApi.Dialogs.ShowMessage(
-                        $"'{gameName}' is already installed at:\n{finalDestination}\n\nDownload skipped.",
-                        "FastInstall - Already Installed",
+                        string.Format(fmt, gameName, finalDestination),
+                        ResourceProvider.GetString("LOCFastInstall_DialogTitle_AlreadyInstalled"),
                         MessageBoxButton.OK,
                         MessageBoxImage.Information);
                     return;
                 }
                 else if (conflictResolution == ConflictResolution.Ask)
                 {
+                    var fmt = ResourceProvider.GetString("LOCFastInstall_Message_OverwriteConfirmFormat");
                     var result = plugin.PlayniteApi.Dialogs.ShowMessage(
-                        $"'{gameName}' is already installed at:\n{finalDestination}\n\n" +
-                        "Do you want to overwrite the existing installation?",
-                        "FastInstall - Installation Conflict",
+                        string.Format(fmt, gameName, finalDestination),
+                        ResourceProvider.GetString("LOCFastInstall_DialogTitle_InstallConflict"),
                         MessageBoxButton.YesNo,
                         MessageBoxImage.Question);
 
@@ -249,9 +254,8 @@ namespace FastInstall
             if (CloudDownloadManager.Instance == null)
             {
                 plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                    "CloudDownloadManager is not initialized.\n\n" +
-                    "Please restart Playnite and try again.",
-                    "FastInstall Error");
+                    ResourceProvider.GetString("LOCFastInstall_Error_CloudDownloadManagerNotInitialized"),
+                    ResourceProvider.GetString("LOCFastInstall_Title_Error"));
                 return;
             }
 
@@ -279,11 +283,10 @@ namespace FastInstall
             catch (Exception ex)
             {
                 logger.Error(ex, "FastInstall: Error starting cloud download");
+                var fmt = ResourceProvider.GetString("LOCFastInstall_Error_StartDownloadFormat");
                 plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                    $"Error starting download:\n\n{ex.Message}\n\n" +
-                    $"File ID: {fileId}\n" +
-                    $"Destination: {finalDestination}",
-                    "FastInstall Error");
+                    string.Format(fmt, ex.Message, fileId, finalDestination),
+                    ResourceProvider.GetString("LOCFastInstall_Title_Error"));
             }
         }
     }
@@ -297,7 +300,7 @@ namespace FastInstall
         public FastUninstallController(Game game, FastInstallPlugin plugin) : base(game)
         {
             this.plugin = plugin;
-            Name = "Remove from SSD";
+            Name = ResourceProvider.GetString("LOCFastInstall_Action_RemoveFromSsd");
         }
 
         public override void Uninstall(UninstallActionArgs args)
@@ -314,8 +317,8 @@ namespace FastInstall
             if (string.IsNullOrWhiteSpace(installPath))
             {
                 plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                    "Could not determine install path for uninstallation.",
-                    "FastInstall Error");
+                    ResourceProvider.GetString("LOCFastInstall_Error_CouldNotDetermineInstallPath"),
+                    ResourceProvider.GetString("LOCFastInstall_Title_Error"));
                 return;
             }
 
@@ -336,10 +339,10 @@ namespace FastInstall
 
                 if (!normalizedInstallPath.StartsWith(normalizedFastInstallDir, StringComparison.OrdinalIgnoreCase))
                 {
+                    var fmt = ResourceProvider.GetString("LOCFastInstall_Error_SafetyCheckFailedFormat");
                     plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                        $"Safety check failed: Will only delete from FastInstall directory.\n\n" +
-                        $"Install path '{installPath}' is not within '{fastInstallDir}'.",
-                        "FastInstall - Safety Error");
+                        string.Format(fmt, installPath, fastInstallDir),
+                        ResourceProvider.GetString("LOCFastInstall_DialogTitle_SafetyError"));
                     return;
                 }
             }
@@ -349,11 +352,10 @@ namespace FastInstall
             var sizeFormatted = FileCopyHelper.FormatBytes(sizeToDelete);
 
             // Confirm deletion
+            var confirmFmt = ResourceProvider.GetString("LOCFastInstall_Message_ConfirmUninstallFormat");
             var confirmResult = plugin.PlayniteApi.Dialogs.ShowMessage(
-                $"Are you sure you want to remove '{Game.Name}' from the SSD?\n\n" +
-                $"This will delete {sizeFormatted} from:\n{installPath}\n\n" +
-                $"The original archive will NOT be affected.",
-                "FastInstall - Confirm Uninstall",
+                string.Format(confirmFmt, Game.Name, sizeFormatted, installPath),
+                ResourceProvider.GetString("LOCFastInstall_DialogTitle_ConfirmUninstall"),
                 System.Windows.MessageBoxButton.YesNo,
                 System.Windows.MessageBoxImage.Question);
 
@@ -370,7 +372,8 @@ namespace FastInstall
                 {
                     try
                     {
-                        progressArgs.Text = $"Removing {Game.Name} ({sizeFormatted})...";
+                        var pFmt = ResourceProvider.GetString("LOCFastInstall_Progress_RemovingFormat");
+                        progressArgs.Text = string.Format(pFmt, Game.Name, sizeFormatted);
                         progressArgs.IsIndeterminate = true;
 
                         // Delete the directory
@@ -390,8 +393,8 @@ namespace FastInstall
                         plugin.PlayniteApi.MainView.UIDispatcher.Invoke(() =>
                         {
                             plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                                $"Permission denied while uninstalling '{Game.Name}'.\n\nSome files may be in use. Please close any programs using files in this folder.",
-                                "FastInstall - Access Denied");
+                                string.Format(ResourceProvider.GetString("LOCFastInstall_Error_PermissionDeniedUninstallFormat"), Game.Name),
+                                ResourceProvider.GetString("LOCFastInstall_DialogTitle_AccessDenied"));
                         });
                     }
                     catch (IOException ex)
@@ -400,8 +403,8 @@ namespace FastInstall
                         plugin.PlayniteApi.MainView.UIDispatcher.Invoke(() =>
                         {
                             plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                                $"Could not delete '{Game.Name}':\n\n{ex.Message}\n\nSome files may be in use.",
-                                "FastInstall - Delete Error");
+                                string.Format(ResourceProvider.GetString("LOCFastInstall_Error_CouldNotDeleteFormat"), Game.Name, ex.Message),
+                                ResourceProvider.GetString("LOCFastInstall_DialogTitle_DeleteError"));
                         });
                     }
                     catch (Exception ex)
@@ -410,12 +413,12 @@ namespace FastInstall
                         plugin.PlayniteApi.MainView.UIDispatcher.Invoke(() =>
                         {
                             plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                                $"Error uninstalling '{Game.Name}':\n\n{ex.Message}",
-                                "FastInstall Error");
+                                string.Format(ResourceProvider.GetString("LOCFastInstall_Error_UninstallGenericFormat"), Game.Name, ex.Message),
+                                ResourceProvider.GetString("LOCFastInstall_Title_Error"));
                         });
                     }
                 },
-                new GlobalProgressOptions($"Removing {Game.Name}...", false)
+                new GlobalProgressOptions(string.Format(ResourceProvider.GetString("LOCFastInstall_Progress_RemovingTitleFormat"), Game.Name), false)
                 {
                     IsIndeterminate = true
                 });
@@ -452,24 +455,24 @@ namespace FastInstall
             switch (gameInfo.GameType)
             {
                 case GameType.PS3:
-                    return "Play with RPCS3";
+                    return ResourceProvider.GetString("LOCFastInstall_Play_PlayWithRpcs3");
                 case GameType.Switch:
-                    return "Play with Ryujinx/Yuzu";
+                    return ResourceProvider.GetString("LOCFastInstall_Play_PlayWithRyujinxYuzu");
                 case GameType.WiiU:
-                    return "Play with Cemu";
+                    return ResourceProvider.GetString("LOCFastInstall_Play_PlayWithCemu");
                 case GameType.Wii:
                 case GameType.GameCube:
-                    return "Play with Dolphin";
+                    return ResourceProvider.GetString("LOCFastInstall_Play_PlayWithDolphin");
                 case GameType.Xbox360:
-                    return "Play with Xenia";
+                    return ResourceProvider.GetString("LOCFastInstall_Play_PlayWithXenia");
                 case GameType.PSP:
-                    return "Play with PPSSPP";
+                    return ResourceProvider.GetString("LOCFastInstall_Play_PlayWithPpsspp");
                 case GameType.NDS:
-                    return "Play with MelonDS/DeSmuME";
+                    return ResourceProvider.GetString("LOCFastInstall_Play_PlayWithMelonDsDesmume");
                 case GameType.PC:
-                    return "Play";
+                    return ResourceProvider.GetString("LOCFastInstall_Play_Play");
                 default:
-                    return "Play";
+                    return ResourceProvider.GetString("LOCFastInstall_Play_Play");
             }
         }
 
@@ -498,8 +501,8 @@ namespace FastInstall
                 logger.Error(ex, $"FastInstall: Error launching '{Game.Name}'");
                 InvokeOnStopped(new GameStoppedEventArgs());
                 plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                    $"Error launching '{Game.Name}':\n\n{ex.Message}",
-                    "FastInstall - Launch Error");
+                    string.Format(ResourceProvider.GetString("LOCFastInstall_Error_LaunchGenericFormat"), Game.Name, ex.Message),
+                    ResourceProvider.GetString("LOCFastInstall_DialogTitle_LaunchError"));
             }
         }
 
@@ -521,12 +524,8 @@ namespace FastInstall
             if (string.IsNullOrWhiteSpace(rpcs3Path) || !File.Exists(rpcs3Path))
             {
                 plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                    "RPCS3 emulator not configured.\n\n" +
-                    "Please configure an emulator:\n" +
-                    "1. Go to Playnite ? Settings ? Emulation\n" +
-                    "2. Add RPCS3 emulator\n" +
-                    "3. Return to FastInstall settings and select RPCS3 from the Emulator dropdown",
-                    "FastInstall - Emulator Not Configured");
+                    ResourceProvider.GetString("LOCFastInstall_Error_Rpcs3NotConfigured"),
+                    ResourceProvider.GetString("LOCFastInstall_DialogTitle_EmulatorNotConfigured"));
                 InvokeOnStopped(new GameStoppedEventArgs());
                 return;
             }
@@ -698,11 +697,12 @@ namespace FastInstall
 
                 if (string.IsNullOrWhiteSpace(executable) || !File.Exists(executable))
                 {
+                    var fmt = ResourceProvider.GetString("LOCFastInstall_Error_EmulatorExeNotFoundFormat");
+                    var profileSuffix = profile != null ? string.Format(ResourceProvider.GetString("LOCFastInstall_Common_ProfileSuffixFormat"), profile.Name) : "";
+                    var installDir = emulator.InstallDir ?? ResourceProvider.GetString("LOCFastInstall_Common_NotConfigured");
                     plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                        $"Could not find executable for emulator '{emulator.Name}'{(profile != null ? $" (Profile: {profile.Name})" : "")}.\n\n" +
-                        $"Install directory: {emulator.InstallDir ?? "(not configured)"}\n\n" +
-                        "Please verify the emulator is properly installed and configured in Playnite settings.",
-                        "FastInstall - Emulator Error");
+                        string.Format(fmt, emulator.Name, profileSuffix, installDir),
+                        ResourceProvider.GetString("LOCFastInstall_DialogTitle_EmulatorError"));
                     InvokeOnStopped(new GameStoppedEventArgs());
                     return;
                 }
@@ -749,8 +749,8 @@ namespace FastInstall
                 logger.Error(ex, $"FastInstall: Error launching game with emulator '{emulator.Name}'");
                 InvokeOnStopped(new GameStoppedEventArgs());
                 plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                    $"Error launching with '{emulator.Name}':\n\n{ex.Message}",
-                    "FastInstall - Launch Error");
+                    string.Format(ResourceProvider.GetString("LOCFastInstall_Error_LaunchWithEmulatorFormat"), emulator.Name, ex.Message),
+                    ResourceProvider.GetString("LOCFastInstall_DialogTitle_LaunchError"));
             }
         }
 
@@ -960,9 +960,8 @@ namespace FastInstall
             if (string.IsNullOrWhiteSpace(gameInfo.ExecutablePath) || !File.Exists(gameInfo.ExecutablePath))
             {
                 plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                    $"Could not find game executable for '{Game.Name}'.\n\n" +
-                    "Please verify the game files are present in the install directory.",
-                    "FastInstall - Executable Not Found");
+                    string.Format(ResourceProvider.GetString("LOCFastInstall_Error_GameExeNotFoundFormat"), Game.Name),
+                    ResourceProvider.GetString("LOCFastInstall_DialogTitle_ExecutableNotFound"));
                 InvokeOnStopped(new GameStoppedEventArgs());
                 return;
             }
@@ -1005,10 +1004,8 @@ namespace FastInstall
             if (string.IsNullOrWhiteSpace(gameInfo.ExecutablePath) || !File.Exists(gameInfo.ExecutablePath))
             {
                 plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                    $"Could not find game file for '{Game.Name}' ({gameInfo.GameType}).\n\n" +
-                    $"Platform: {gameInfo.PlatformName}\n" +
-                    "Please configure the appropriate emulator in Playnite or set up a custom play action.",
-                    "FastInstall - Game File Not Found");
+                    string.Format(ResourceProvider.GetString("LOCFastInstall_Error_GameFileNotFoundFormat"), Game.Name, gameInfo.GameType, gameInfo.PlatformName),
+                    ResourceProvider.GetString("LOCFastInstall_DialogTitle_GameFileNotFound"));
                 InvokeOnStopped(new GameStoppedEventArgs());
                 return;
             }
@@ -1047,7 +1044,7 @@ namespace FastInstall
 
                     plugin.PlayniteApi.Notifications.Add(new NotificationMessage(
                         $"FastInstall_Playing_{Game.Id}",
-                        $"'{Game.Name}' is now playing.\nYou may need to manually stop the game in Playnite when done.",
+                        string.Format(ResourceProvider.GetString("LOCFastInstall_Notification_PlayingFormat"), Game.Name),
                         NotificationType.Info));
                 }
             }
@@ -1055,10 +1052,8 @@ namespace FastInstall
             {
                 logger.Warn(ex, $"FastInstall: Could not launch '{Game.Name}' with default program");
                 plugin.PlayniteApi.Dialogs.ShowErrorMessage(
-                    $"Could not launch '{Game.Name}'.\n\n" +
-                    $"No default program is associated with {Path.GetExtension(gameInfo.ExecutablePath)} files.\n\n" +
-                    "Please install the appropriate emulator and set it as the default program, or configure a custom play action.",
-                    "FastInstall - Launch Error");
+                    string.Format(ResourceProvider.GetString("LOCFastInstall_Error_NoDefaultProgramFormat"), Game.Name, Path.GetExtension(gameInfo.ExecutablePath)),
+                    ResourceProvider.GetString("LOCFastInstall_DialogTitle_LaunchError"));
                 InvokeOnStopped(new GameStoppedEventArgs());
             }
         }

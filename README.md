@@ -6,6 +6,12 @@ It's designed for large collections (including ROM folders/emulators) where you 
 
 ## Features
 
+### New in 1.2.0
+- **Full localization support**:
+  - English and Italian translations for all UI, dialogs, and notifications
+  - Automatic language selection based on Playnite’s current language
+  - Localized error messages for Google Drive, 7-Zip, disk space checks, and integrity verification
+
 ### Core Functionality
 - **Archive → SSD Installation** - Copy game folders from archive (HDD) to fast drive (SSD)
 - **Multiple Folder Configurations** - Configure multiple source/destination path pairs

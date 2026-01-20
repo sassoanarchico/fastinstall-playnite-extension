@@ -102,7 +102,8 @@ namespace FastInstall
             {
                 if (viewModel.plugin?.PlayniteApi != null)
                 {
-                    var selectedFile = viewModel.plugin.PlayniteApi.Dialogs.SelectFile("7-Zip Executable|7z.exe;7za.exe;7zFM.exe|All Files|*.*");
+                    var filter = ResourceProvider.GetString("LOCFastInstall_Settings_Select7Zip_Filter");
+                    var selectedFile = viewModel.plugin.PlayniteApi.Dialogs.SelectFile(filter);
                     if (!string.IsNullOrEmpty(selectedFile) && File.Exists(selectedFile))
                     {
                         viewModel.Settings.SevenZipPath = selectedFile;
@@ -127,9 +128,12 @@ namespace FastInstall
                 logger.Error(ex, "FastInstall: Error opening 7-Zip download page");
                 if (DataContext is FastInstallSettingsViewModel viewModel)
                 {
+                    var msg = string.Format(
+                        ResourceProvider.GetString("LOCFastInstall_Settings_ErrorOpenBrowser_Format"),
+                        ex.Message);
                     viewModel.plugin?.PlayniteApi?.Dialogs.ShowErrorMessage(
-                        $"Error opening browser:\n{ex.Message}\n\nPlease visit: https://www.7-zip.org/download.html",
-                        "FastInstall - Download 7-Zip");
+                        msg,
+                        ResourceProvider.GetString("LOCFastInstall_Settings_Download7Zip_Title"));
                 }
             }
         }
@@ -138,37 +142,13 @@ namespace FastInstall
         {
             if (DataContext is FastInstallSettingsViewModel viewModel)
             {
-                var message = @"How to get a Google Drive API Key:
-
-1. Go to Google Cloud Console:
-   https://console.cloud.google.com/
-
-2. Create a new project (or select an existing one)
-
-3. Enable the Google Drive API:
-   - Go to 'APIs & Services' → 'Library'
-   - Search for 'Google Drive API'
-   - Click 'Enable'
-
-4. Create credentials:
-   - Go to 'APIs & Services' → 'Credentials'
-   - Click 'Create Credentials' → 'API Key'
-   - Copy the generated API key
-
-5. (Optional) Restrict the API key:
-   - Click on the API key to edit it
-   - Under 'API restrictions', select 'Google Drive API'
-   - This improves security
-
-Note: The API key is FREE and doesn't require billing.
-It's only needed for listing shared folder contents.
-Direct file links work without an API key.
-
-Do you want to open Google Cloud Console now?";
+                var message = ResourceProvider.GetString("LOCFastInstall_Settings_ApiKeyHelp_Message")
+                            + "\n\n"
+                            + ResourceProvider.GetString("LOCFastInstall_Settings_ApiKeyHelp_ConfirmOpenConsole");
 
                 var result = viewModel.plugin?.PlayniteApi?.Dialogs.ShowMessage(
                     message,
-                    "How to get a Google Drive API Key",
+                    ResourceProvider.GetString("LOCFastInstall_Settings_ApiKeyHelp_Title"),
                     System.Windows.MessageBoxButton.YesNo,
                     System.Windows.MessageBoxImage.Information);
 

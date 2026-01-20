@@ -116,7 +116,7 @@ namespace FastInstall
             {
                 EmulatorId = EmulatorId.Value,
                 ProfileId = null,
-                DisplayName = "(Default / Auto)"
+                DisplayName = ResourceProvider.GetString("LOCFastInstall_Common_DefaultAuto")
             });
         }
 
@@ -515,6 +515,25 @@ namespace FastInstall
             }
         }
 
+        /// <summary>
+        /// Localized text shown in the Settings UI, e.g. "Version 1.1.1".
+        /// </summary>
+        public string PluginVersionText
+        {
+            get
+            {
+                try
+                {
+                    var format = ResourceProvider.GetString("LOCFastInstall_About_VersionFormat");
+                    return string.Format(format, PluginVersionDisplay);
+                }
+                catch
+                {
+                    return $"Version {PluginVersionDisplay}";
+                }
+            }
+        }
+
         // Available platforms for dropdown
         private readonly List<string> availablePlatforms = new List<string>
         {
@@ -649,6 +668,7 @@ namespace FastInstall
 
             // Ensure UI can display version
             OnPropertyChanged(nameof(PluginVersionDisplay));
+            OnPropertyChanged(nameof(PluginVersionText));
         }
 
         private void LoadAvailableEmulators()
@@ -661,7 +681,7 @@ namespace FastInstall
             {
                 EmulatorId = Guid.Empty,
                 ProfileId = null,
-                DisplayName = "(None / Auto-detect)"
+                DisplayName = ResourceProvider.GetString("LOCFastInstall_Common_NoneAutoDetect")
             });
 
             try
@@ -700,7 +720,7 @@ namespace FastInstall
                                         var nameProperty = profile.GetType().GetProperty("Name");
                                         var idProperty = profile.GetType().GetProperty("Id");
                                         
-                                        var profileName = nameProperty?.GetValue(profile)?.ToString() ?? "Unknown";
+                                        var profileName = nameProperty?.GetValue(profile)?.ToString() ?? ResourceProvider.GetString("LOCFastInstall_Common_Unknown");
                                         var profileId = idProperty?.GetValue(profile)?.ToString();
 
                                         if (!string.IsNullOrWhiteSpace(profileId))
@@ -832,16 +852,17 @@ namespace FastInstall
             {
                 if (string.IsNullOrWhiteSpace(config.SourcePath))
                 {
-                    errors.Add("Enabled local configurations must have a source path.");
+                    errors.Add(ResourceProvider.GetString("LOCFastInstall_Settings_Verify_EnabledLocalNeedSource"));
                 }
                 else if (!System.IO.Directory.Exists(config.SourcePath))
                 {
-                    errors.Add($"Source directory does not exist: {config.SourcePath}");
+                    var fmt = ResourceProvider.GetString("LOCFastInstall_Settings_Verify_SourceDirMissingFormat");
+                    errors.Add(string.Format(fmt, config.SourcePath));
                 }
 
                 if (string.IsNullOrWhiteSpace(config.DestinationPath))
                 {
-                    errors.Add("Enabled local configurations must have a destination path.");
+                    errors.Add(ResourceProvider.GetString("LOCFastInstall_Settings_Verify_EnabledLocalNeedDestination"));
                 }
             }
 
@@ -851,11 +872,11 @@ namespace FastInstall
             {
                 if (string.IsNullOrWhiteSpace(cloudSource.CloudLink))
                 {
-                    errors.Add("Enabled cloud sources must have a Google Drive link.");
+                    errors.Add(ResourceProvider.GetString("LOCFastInstall_Settings_Verify_EnabledCloudNeedLink"));
                 }
                 if (string.IsNullOrWhiteSpace(cloudSource.DestinationPath))
                 {
-                    errors.Add("Enabled cloud sources must have a destination path.");
+                    errors.Add(ResourceProvider.GetString("LOCFastInstall_Settings_Verify_EnabledCloudNeedDestination"));
                 }
             }
 
@@ -1019,7 +1040,9 @@ namespace FastInstall
                     {
                         if (config == null || string.IsNullOrWhiteSpace(config.CloudLink))
                         {
-                            plugin.PlayniteApi.Dialogs.ShowMessage("Please enter a cloud link first.", "Test Connection");
+                            plugin.PlayniteApi.Dialogs.ShowMessage(
+                                ResourceProvider.GetString("LOCFastInstall_CloudTest_EnterLinkFirst"),
+                                ResourceProvider.GetString("LOCFastInstall_CloudTest_Title_TestConnection"));
                             return;
                         }
 
@@ -1027,9 +1050,8 @@ namespace FastInstall
                         if (provider == null)
                         {
                             plugin.PlayniteApi.Dialogs.ShowMessage(
-                                "Cloud provider not available.\n\n" +
-                                "Make sure you have restarted Playnite after installing the extension.",
-                                "Test Connection");
+                                ResourceProvider.GetString("LOCFastInstall_CloudTest_ProviderNotAvailable_Message"),
+                                ResourceProvider.GetString("LOCFastInstall_CloudTest_ProviderNotAvailable_Title"));
                             return;
                         }
 
@@ -1044,12 +1066,8 @@ namespace FastInstall
                         if (!parseResult.IsValid)
                         {
                             plugin.PlayniteApi.Dialogs.ShowMessage(
-                                $"Invalid link format.\n\n{parseResult.ErrorMessage}\n\n" +
-                                "Supported formats:\n" +
-                                "• https://drive.google.com/file/d/FILE_ID/view\n" +
-                                "• https://drive.google.com/drive/folders/FOLDER_ID\n" +
-                                "• https://drive.google.com/open?id=FILE_ID", 
-                                "Invalid Link");
+                                string.Format(ResourceProvider.GetString("LOCFastInstall_CloudTest_InvalidLink_MessageFormat"), parseResult.ErrorMessage),
+                                ResourceProvider.GetString("LOCFastInstall_CloudTest_InvalidLink_Title"));
                             return;
                         }
 
@@ -1065,10 +1083,8 @@ namespace FastInstall
                                 if (string.IsNullOrWhiteSpace(Settings.GoogleDriveApiKey))
                                 {
                                     plugin.PlayniteApi.Dialogs.ShowMessage(
-                                        "This appears to be a folder link.\n\n" +
-                                        "To list folder contents, you need to configure a Google Drive API Key.\n\n" +
-                                        "Go to the 'How to get an API Key' button for instructions.",
-                                        "API Key Required");
+                                        ResourceProvider.GetString("LOCFastInstall_CloudTest_ApiKeyRequired_Message"),
+                                        ResourceProvider.GetString("LOCFastInstall_CloudTest_ApiKeyRequired_Title"));
                                     return;
                                 }
 
@@ -1078,17 +1094,15 @@ namespace FastInstall
                                 if (files == null || files.Count == 0)
                                 {
                                     plugin.PlayniteApi.Dialogs.ShowMessage(
-                                        "Folder is empty or could not be accessed.\n\n" +
-                                        "Make sure:\n" +
-                                        "• The folder is shared publicly (Anyone with the link)\n" +
-                                        "• The API key is valid and has Google Drive API enabled",
-                                        "No Files Found");
+                                        ResourceProvider.GetString("LOCFastInstall_CloudTest_FolderEmpty_Message"),
+                                        ResourceProvider.GetString("LOCFastInstall_CloudTest_FolderEmpty_Title"));
                                     return;
                                 }
 
                                 // Build content list
                                 var contentList = new System.Text.StringBuilder();
-                                contentList.AppendLine($"Found {files.Count} items in folder:\n");
+                                contentList.AppendLine(string.Format(ResourceProvider.GetString("LOCFastInstall_CloudTest_FolderContents_HeaderFormat"), files.Count));
+                                contentList.AppendLine();
                                 
                                 int count = 0;
                                 long totalSize = 0;
@@ -1106,7 +1120,8 @@ namespace FastInstall
                                 
                                 if (count > 20)
                                 {
-                                    contentList.AppendLine($"\n... and {count - 20} more items");
+                                    contentList.AppendLine();
+                                    contentList.AppendLine(string.Format(ResourceProvider.GetString("LOCFastInstall_CloudTest_FolderContents_MoreItemsFormat"), count - 20));
                                 }
 
                                 // Format total size
@@ -1116,14 +1131,15 @@ namespace FastInstall
                                 else if (totalSize < 1024 * 1024 * 1024) totalFormatted = $"{totalSize / (1024.0 * 1024.0):F1} MB";
                                 else totalFormatted = $"{totalSize / (1024.0 * 1024.0 * 1024.0):F2} GB";
 
-                                contentList.AppendLine($"\nTotal size: {totalFormatted}");
+                                contentList.AppendLine();
+                                contentList.AppendLine(string.Format(ResourceProvider.GetString("LOCFastInstall_CloudTest_FolderContents_TotalSizeFormat"), totalFormatted));
 
-                                plugin.PlayniteApi.Dialogs.ShowMessage(contentList.ToString(), "Folder Contents");
+                                plugin.PlayniteApi.Dialogs.ShowMessage(contentList.ToString(), ResourceProvider.GetString("LOCFastInstall_CloudTest_FolderContents_Title"));
                                 config.IsValidated = true;
                                 
                                 if (string.IsNullOrWhiteSpace(config.DisplayName))
                                 {
-                                    config.DisplayName = $"Google Drive Folder ({files.Count} items)";
+                                    config.DisplayName = string.Format(ResourceProvider.GetString("LOCFastInstall_CloudTest_DefaultFolderNameFormat"), files.Count);
                                 }
                             }
                             else
@@ -1134,13 +1150,12 @@ namespace FastInstall
                                 var fileInfo = await provider.GetFileInfoAsync(parseResult.FileId);
                                 if (fileInfo != null)
                                 {
-                                    var message = $"✅ File found!\n\n" +
-                                        $"Name: {fileInfo.Name}\n" +
-                                        $"Size: {fileInfo.SizeFormatted}\n" +
-                                        $"Type: {(fileInfo.MimeType ?? "Unknown")}\n\n" +
-                                        "This file can be downloaded without an API key.";
-                                    
-                                    plugin.PlayniteApi.Dialogs.ShowMessage(message, "Connection Successful");
+                                    var msg = string.Format(
+                                        ResourceProvider.GetString("LOCFastInstall_CloudTest_FileFound_MessageFormat"),
+                                        fileInfo.Name,
+                                        fileInfo.SizeFormatted,
+                                        (fileInfo.MimeType ?? ResourceProvider.GetString("LOCFastInstall_Common_Unknown")));
+                                    plugin.PlayniteApi.Dialogs.ShowMessage(msg, ResourceProvider.GetString("LOCFastInstall_CloudTest_ConnectionSuccessful_Title"));
                                     config.IsValidated = true;
                                     
                                     if (string.IsNullOrWhiteSpace(config.DisplayName))
@@ -1152,11 +1167,8 @@ namespace FastInstall
                                 {
                                     // Can't get file info without API key, but download might still work
                                     plugin.PlayniteApi.Dialogs.ShowMessage(
-                                        "Link parsed successfully.\n\n" +
-                                        $"File ID: {parseResult.FileId}\n\n" +
-                                        "Note: Could not get file details (API key not set or file is private).\n" +
-                                        "The download might still work if the file is publicly shared.",
-                                        "Link Valid");
+                                        string.Format(ResourceProvider.GetString("LOCFastInstall_CloudTest_LinkValid_MessageFormat"), parseResult.FileId),
+                                        ResourceProvider.GetString("LOCFastInstall_CloudTest_LinkValid_Title"));
                                     config.IsValidated = true;
                                 }
                             }
@@ -1164,12 +1176,8 @@ namespace FastInstall
                         catch (Exception ex)
                         {
                             plugin.PlayniteApi.Dialogs.ShowMessage(
-                                $"Error testing connection:\n\n{ex.Message}\n\n" +
-                                "Make sure:\n" +
-                                "• The link is publicly shared\n" +
-                                "• The API key is correct (if using folders)\n" +
-                                "• You have internet connection",
-                                "Test Failed");
+                                string.Format(ResourceProvider.GetString("LOCFastInstall_CloudTest_TestFailed_MessageFormat"), ex.Message),
+                                ResourceProvider.GetString("LOCFastInstall_CloudTest_TestFailed_Title"));
                         }
                     });
                 }

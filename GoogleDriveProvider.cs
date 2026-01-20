@@ -67,7 +67,7 @@ namespace FastInstall
             if (string.IsNullOrWhiteSpace(url))
             {
                 result.IsValid = false;
-                result.ErrorMessage = "URL is empty";
+                result.ErrorMessage = ResourceProvider.GetString("LOCFastInstall_GD_Parse_UrlEmpty");
                 return result;
             }
 
@@ -121,7 +121,7 @@ namespace FastInstall
             }
 
             result.IsValid = false;
-            result.ErrorMessage = "Invalid Google Drive URL format";
+            result.ErrorMessage = ResourceProvider.GetString("LOCFastInstall_GD_Parse_InvalidUrlFormat");
             return result;
         }
 
@@ -161,7 +161,7 @@ namespace FastInstall
             if (string.IsNullOrWhiteSpace(apiKey))
             {
                 logger.Warn("GoogleDriveProvider: API key not set, cannot list files");
-                throw new Exception("API key is not configured. Please set your Google Drive API key in settings.");
+                throw new Exception(ResourceProvider.GetString("LOCFastInstall_GD_Error_ApiKeyNotConfigured"));
             }
 
             logger.Info($"GoogleDriveProvider: Listing files in folder {folderId}");
@@ -190,7 +190,7 @@ namespace FastInstall
                         var errorMatch = System.Text.RegularExpressions.Regex.Match(responseContent, @"""message""\s*:\s*""([^""]+)""");
                         var errorMessage = errorMatch.Success ? errorMatch.Groups[1].Value : $"HTTP {response.StatusCode}";
                         
-                        throw new Exception($"Google Drive API error: {errorMessage}");
+                        throw new Exception(string.Format(ResourceProvider.GetString("LOCFastInstall_GD_Error_ApiErrorFormat"), errorMessage));
                     }
 
                     var (parsedFiles, nextToken) = ParseFileListJson(responseContent);
@@ -206,7 +206,7 @@ namespace FastInstall
             catch (HttpRequestException ex)
             {
                 logger.Error(ex, "GoogleDriveProvider: Network error listing files");
-                throw new Exception($"Network error: {ex.Message}. Check your internet connection.");
+                throw new Exception(string.Format(ResourceProvider.GetString("LOCFastInstall_GD_Error_NetworkErrorFormat"), ex.Message));
             }
             catch (Exception ex) when (!(ex is Exception))
             {
@@ -283,7 +283,7 @@ namespace FastInstall
                 {
                     response?.Dispose();
                     logger.Error(httpEx, $"GoogleDriveProvider: Network error connecting to Google Drive");
-                    throw new Exception($"Network error: {httpEx.Message}. Check your internet connection.");
+                    throw new Exception(string.Format(ResourceProvider.GetString("LOCFastInstall_GD_Error_NetworkErrorFormat"), httpEx.Message));
                 }
 
                 logger.Info($"GoogleDriveProvider: Response status: {response.StatusCode}");
@@ -300,15 +300,15 @@ namespace FastInstall
                         
                         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                         {
-                            throw new Exception("File not found. Make sure the file exists and is publicly shared.");
+                            throw new Exception(ResourceProvider.GetString("LOCFastInstall_GD_Error_FileNotFound"));
                         }
                         else if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
                         {
-                            throw new Exception("Access denied. Make sure the file is shared as 'Anyone with the link'.");
+                            throw new Exception(ResourceProvider.GetString("LOCFastInstall_GD_Error_AccessDenied"));
                         }
                         else
                         {
-                            throw new Exception($"Download failed with HTTP {(int)response.StatusCode}: {response.ReasonPhrase}");
+                            throw new Exception(string.Format(ResourceProvider.GetString("LOCFastInstall_GD_Error_DownloadFailedHttpFormat"), (int)response.StatusCode, response.ReasonPhrase));
                         }
                     }
 
@@ -354,20 +354,21 @@ namespace FastInstall
                             else
                             {
                                 logger.Error("GoogleDriveProvider: Failed to get confirm download URL");
-                                throw new Exception("Failed to handle large file download confirmation. The file might be too large or require manual download.");
+                                throw new Exception(ResourceProvider.GetString("LOCFastInstall_GD_Error_LargeFileConfirmFailed"));
                             }
                         }
                         else if (htmlContent.Contains("not found") || htmlContent.Contains("404") || htmlContent.Contains("does not exist"))
                         {
-                            throw new Exception("File not found on Google Drive. Check if the file still exists.");
+                            throw new Exception(ResourceProvider.GetString("LOCFastInstall_GD_Error_FileNotFoundOnDrive"));
                         }
                         else if (htmlContent.Contains("access") || htmlContent.Contains("permission") || htmlContent.Contains("denied"))
                         {
-                            throw new Exception("Access denied. Make sure the file is shared as 'Anyone with the link'.");
+                            throw new Exception(ResourceProvider.GetString("LOCFastInstall_GD_Error_AccessDenied"));
                         }
                         else
                         {
-                            throw new Exception($"Unexpected response from Google Drive. The file might not be publicly shared.\n\nResponse: {htmlContent.Substring(0, Math.Min(200, htmlContent.Length))}");
+                            var snippet = htmlContent.Substring(0, Math.Min(200, htmlContent.Length));
+                            throw new Exception(string.Format(ResourceProvider.GetString("LOCFastInstall_GD_Error_UnexpectedResponseFormat"), snippet));
                         }
                     }
 
@@ -450,7 +451,7 @@ namespace FastInstall
                 if (!response.IsSuccessStatusCode)
                 {
                     logger.Error($"GoogleDriveProvider: Download failed with status {response.StatusCode}");
-                    throw new Exception($"Download failed with HTTP {response.StatusCode}: {response.ReasonPhrase}");
+                    throw new Exception(string.Format(ResourceProvider.GetString("LOCFastInstall_GD_Error_DownloadFailedHttpFormat"), (int)response.StatusCode, response.ReasonPhrase));
                 }
 
                 // Check if we still got HTML (confirm URL didn't work)
@@ -490,7 +491,7 @@ namespace FastInstall
                         }
                     }
                     
-                    throw new Exception("Unable to download file. Google Drive is still showing a warning page. The file might require manual download from the browser.");
+                    throw new Exception(ResourceProvider.GetString("LOCFastInstall_GD_Error_StillWarningPage"));
                 }
 
                 return await DownloadStreamToFile(response, destinationPath, progress, progressCallback, stopwatch, cancellationToken);

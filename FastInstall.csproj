@@ -52,6 +52,7 @@
     <Compile Include="FastInstallPlugin.cs" />
     <Compile Include="FastInstallClient.cs" />
     <Compile Include="FastInstallSettings.cs" />
+    <Compile Include="LocalizationConverters.cs" />
     <Compile Include="FastInstallSettingsView.xaml.cs">
       <DependentUpon>FastInstallSettingsView.xaml</DependentUpon>
     </Compile>
@@ -88,6 +89,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="icon.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Localization\*.xaml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

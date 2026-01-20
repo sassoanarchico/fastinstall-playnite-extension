@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Windows;
+using Playnite.SDK;
 
 namespace FastInstall
 {
@@ -28,7 +29,9 @@ namespace FastInstall
             onResumeRequested = onResume;
             
             GameNameText.Text = gameName;
-            StatusText.Text = startQueued ? "Queued for installation..." : "Preparing to copy files...";
+            StatusText.Text = startQueued
+                ? ResourceProvider.GetString("LOCFastInstall_Progress_Status_PreparingQueued")
+                : ResourceProvider.GetString("LOCFastInstall_Progress_Status_PreparingCopy");
             
             // Show/hide pause button based on availability
             if (onPauseRequested != null && onResumeRequested != null)
@@ -70,7 +73,7 @@ namespace FastInstall
                 CurrentFileText.ToolTip = progress.CurrentFile;
             }
             
-            StatusText.Text = "Copying files...";
+            StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Progress_Status_Copying");
         }
 
         /// <summary>
@@ -82,13 +85,13 @@ namespace FastInstall
             
             MainProgressBar.Value = 100;
             ProgressPercentText.Text = "100%";
-            StatusText.Text = "Installation completed successfully!";
+            StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Progress_Status_Completed");
             StatusText.Foreground = System.Windows.Media.Brushes.LightGreen;
             
-            CancelButton.Content = "Close";
+            CancelButton.Content = ResourceProvider.GetString("LOCFastInstall_Progress_Button_Close");
             CancelButton.Background = System.Windows.Media.Brushes.ForestGreen;
             
-            CurrentFileText.Text = "All files copied";
+            CurrentFileText.Text = ResourceProvider.GetString("LOCFastInstall_Progress_Status_AllFilesCopied");
             RemainingText.Text = "00:00";
         }
 
@@ -99,10 +102,11 @@ namespace FastInstall
         {
             isCompleted = true;
             
-            StatusText.Text = $"Error: {errorMessage}";
+            var fmt = ResourceProvider.GetString("LOCFastInstall_Progress_Status_ErrorFormat");
+            StatusText.Text = string.Format(fmt, errorMessage);
             StatusText.Foreground = System.Windows.Media.Brushes.OrangeRed;
             
-            CancelButton.Content = "Close";
+            CancelButton.Content = ResourceProvider.GetString("LOCFastInstall_Progress_Button_Close");
             CancelButton.Background = System.Windows.Media.Brushes.Gray;
         }
 
@@ -113,12 +117,12 @@ namespace FastInstall
         {
             isCompleted = true;
 
-            StatusText.Text = showCleaningUp 
-                ? "Installation cancelled. Cleaning up..." 
-                : "Installation cancelled";
+            StatusText.Text = showCleaningUp
+                ? ResourceProvider.GetString("LOCFastInstall_Progress_Status_CancelledCleaningUp")
+                : ResourceProvider.GetString("LOCFastInstall_Progress_Status_Cancelled");
             StatusText.Foreground = System.Windows.Media.Brushes.Orange;
             
-            CancelButton.Content = "Close";
+            CancelButton.Content = ResourceProvider.GetString("LOCFastInstall_Progress_Button_Close");
             CancelButton.Background = System.Windows.Media.Brushes.Gray;
         }
 
@@ -136,9 +140,9 @@ namespace FastInstall
             {
                 // Pause
                 isPaused = true;
-                PauseButton.Content = "Resume";
+                PauseButton.Content = ResourceProvider.GetString("LOCFastInstall_Progress_Button_Resume");
                 PauseButton.Background = System.Windows.Media.Brushes.Green;
-                StatusText.Text = "Pausing installation...";
+                StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Progress_Status_Pausing");
                 StatusText.Foreground = System.Windows.Media.Brushes.Yellow;
                 onPauseRequested?.Invoke();
             }
@@ -146,9 +150,9 @@ namespace FastInstall
             {
                 // Resume
                 isPaused = false;
-                PauseButton.Content = "Pause";
+                PauseButton.Content = ResourceProvider.GetString("LOCFastInstall_Progress_Button_Pause");
                 PauseButton.Background = System.Windows.Media.Brushes.Orange;
-                StatusText.Text = "Resuming installation...";
+                StatusText.Text = ResourceProvider.GetString("LOCFastInstall_Progress_Status_Resuming");
                 StatusText.Foreground = System.Windows.Media.Brushes.White;
                 onResumeRequested?.Invoke();
             }
@@ -162,12 +166,12 @@ namespace FastInstall
             isPaused = paused;
             if (paused)
             {
-                PauseButton.Content = "Resume";
+                PauseButton.Content = ResourceProvider.GetString("LOCFastInstall_Progress_Button_Resume");
                 PauseButton.Background = System.Windows.Media.Brushes.Green;
             }
             else
             {
-                PauseButton.Content = "Pause";
+                PauseButton.Content = ResourceProvider.GetString("LOCFastInstall_Progress_Button_Pause");
                 PauseButton.Background = System.Windows.Media.Brushes.Orange;
             }
         }
@@ -182,8 +186,8 @@ namespace FastInstall
             
             // Ask for confirmation
             var result = MessageBox.Show(
-                "Are you sure you want to cancel the installation?\n\nPartially copied files will be deleted.",
-                "Cancel Installation",
+                ResourceProvider.GetString("LOCFastInstall_Progress_ConfirmCancel_Message"),
+                ResourceProvider.GetString("LOCFastInstall_Progress_ConfirmCancel_Title"),
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
             
@@ -201,8 +205,8 @@ namespace FastInstall
             {
                 // Ask for confirmation before closing
                 var result = MessageBox.Show(
-                    "Installation is still in progress.\n\nDo you want to cancel and close?",
-                    "Installation in Progress",
+                    ResourceProvider.GetString("LOCFastInstall_Progress_ClosingInProgress_Message"),
+                    ResourceProvider.GetString("LOCFastInstall_Progress_ClosingInProgress_Title"),
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Warning);
                 
