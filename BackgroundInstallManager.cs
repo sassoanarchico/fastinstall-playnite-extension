@@ -63,6 +63,7 @@ namespace FastInstall
         private readonly ConcurrentQueue<InstallationJob> installQueue;
         private readonly object queueLock = new object(); // For priority-based queue management
         private readonly IPlayniteAPI playniteAPI;
+        private FastInstallPlugin plugin; // Reference to the plugin for updating game database
         private SemaphoreSlim parallelInstallSemaphore;
         private int maxParallelInstalls = 1; // Default: sequential
         private readonly object settingsLock = new object();
@@ -80,20 +81,26 @@ namespace FastInstall
             }
         }
 
-        public static void Initialize(IPlayniteAPI api, Func<string> getSevenZipPath = null)
+        public static void Initialize(IPlayniteAPI api, Func<string> getSevenZipPath = null, FastInstallPlugin plugin = null)
         {
             lock (lockObj)
             {
                 if (instance == null)
                 {
-                    instance = new BackgroundInstallManager(api, getSevenZipPath);
+                    instance = new BackgroundInstallManager(api, getSevenZipPath, plugin);
+                }
+                else if (plugin != null)
+                {
+                    // Update plugin reference if provided
+                    instance.plugin = plugin;
                 }
             }
         }
 
-        private BackgroundInstallManager(IPlayniteAPI api, Func<string> getSevenZipPath = null)
+        private BackgroundInstallManager(IPlayniteAPI api, Func<string> getSevenZipPath = null, FastInstallPlugin plugin = null)
         {
             playniteAPI = api;
+            this.plugin = plugin;
             activeInstallations = new ConcurrentDictionary<Guid, InstallationJob>();
             installQueue = new ConcurrentQueue<InstallationJob>();
             parallelInstallSemaphore = new SemaphoreSlim(maxParallelInstalls, maxParallelInstalls);
@@ -785,6 +792,13 @@ namespace FastInstall
                         if (integrityResult.IsValid)
                         {
                             job.ProgressWindow?.ShowCompleted();
+                        }
+                        
+                        // Update game database to preserve FastInstall metadata (platform, PluginId, etc.)
+                        // This prevents other plugins (like EmuLibrary) from overwriting game information during library scans
+                        if (plugin != null)
+                        {
+                            plugin.UpdateGameAfterInstallation(job.Game, job.DestinationPath);
                         }
                         
                         // Invoke the completion callback

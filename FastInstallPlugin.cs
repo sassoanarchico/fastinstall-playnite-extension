@@ -48,7 +48,7 @@ namespace FastInstall
         private static readonly ILogger logger = LogManager.GetLogger();
         private FastInstallSettingsViewModel settingsViewModel;
 
-        public const string PluginVersion = "1.1.1";
+        public const string PluginVersion = "1.3.4";
         
         public override Guid Id { get; } = Guid.Parse("F8A1B2C3-D4E5-6789-ABCD-EF1234567890");
         public override string Name => "FastInstall";
@@ -73,7 +73,7 @@ namespace FastInstall
 
             // Initialize cloud download manager
             CloudDownloadManager.Initialize(api, settingsViewModel.Settings.EffectiveMaxParallelDownloads, 
-                () => settingsViewModel.Settings?.SevenZipPath ?? string.Empty);
+                () => settingsViewModel.Settings?.SevenZipPath ?? string.Empty, this);
 
             // Configure Google Drive API key if available
             if (!string.IsNullOrWhiteSpace(settingsViewModel.Settings?.GoogleDriveApiKey))
@@ -186,17 +186,32 @@ namespace FastInstall
                         var detectedGame = DetectGameInfo(dir);
                         var gameId = GenerateGameId(normalizedConfigSourcePath, detectedGame.Name);
 
-                        // Check if game is already installed on SSD
+                        // First, check if this game already exists in the database
+                        // This preserves installation status and other metadata
+                        var existingGame = PlayniteApi.Database.Games.FirstOrDefault(g => g.GameId == gameId && g.PluginId == Id);
+                        
                         bool isInstalled = false;
                         string installDir = null;
 
-                        if (!string.IsNullOrWhiteSpace(config.DestinationPath))
+                        if (existingGame != null)
                         {
-                            var potentialInstallPath = Path.Combine(config.DestinationPath, detectedGame.Name);
-                            if (Directory.Exists(potentialInstallPath))
+                            // Game exists in database - preserve its installation status
+                            isInstalled = existingGame.IsInstalled;
+                            installDir = existingGame.InstallDirectory;
+                            logger.Debug($"FastInstall: Found existing game '{detectedGame.Name}' in database (Installed: {isInstalled}, InstallDir: {installDir ?? "(null)"})");
+                        }
+                        else
+                        {
+                            // New game - check if it's installed on SSD
+                            if (!string.IsNullOrWhiteSpace(config.DestinationPath))
                             {
-                                isInstalled = true;
-                                installDir = potentialInstallPath;
+                                var potentialInstallPath = Path.Combine(config.DestinationPath, detectedGame.Name);
+                                if (Directory.Exists(potentialInstallPath))
+                                {
+                                    isInstalled = true;
+                                    installDir = potentialInstallPath;
+                                    logger.Debug($"FastInstall: New game '{detectedGame.Name}' found installed at '{installDir}'");
+                                }
                             }
                         }
 
@@ -205,6 +220,17 @@ namespace FastInstall
                         if (!string.IsNullOrWhiteSpace(config.Platform) && config.Platform != "PC")
                         {
                             platformName = config.Platform;
+                        }
+                        
+                        // If game exists in database, use its platform if available
+                        if (existingGame != null && existingGame.Platforms?.Any() == true)
+                        {
+                            var existingPlatform = existingGame.Platforms.FirstOrDefault()?.Name;
+                            if (!string.IsNullOrWhiteSpace(existingPlatform))
+                            {
+                                platformName = existingPlatform;
+                                logger.Debug($"FastInstall: Using existing platform '{platformName}' for '{detectedGame.Name}'");
+                            }
                         }
 
                         var game = new GameMetadata
@@ -805,7 +831,7 @@ namespace FastInstall
 
         public override UserControl GetSettingsView(bool firstRunSettings)
         {
-            return new FastInstallSettingsView();
+            return new FastInstallSettingsView(this);
         }
 
         /// <summary>
@@ -1333,6 +1359,127 @@ namespace FastInstall
 
             var parseResult = provider.ParseLink(cloudSource.CloudLink);
             return parseResult.IsValid ? parseResult.FileId : null;
+        }
+
+        /// <summary>
+        /// Updates the game database entry after installation to preserve FastInstall metadata
+        /// This prevents other plugins (like EmuLibrary) from overwriting game information during library scans
+        /// </summary>
+        public void UpdateGameAfterInstallation(Game game, string installDirectory)
+        {
+            if (game == null)
+            {
+                logger.Warn("FastInstall: UpdateGameAfterInstallation called with null game");
+                return;
+            }
+
+            try
+            {
+                // Get the game from database to ensure we have the latest version
+                var dbGame = PlayniteApi.Database.Games.Get(game.Id);
+                if (dbGame == null)
+                {
+                    logger.Warn($"FastInstall: Game '{game.Name}' not found in database, cannot update");
+                    return;
+                }
+
+                bool needsUpdate = false;
+
+                // Ensure PluginId is set to FastInstall
+                if (dbGame.PluginId != Id)
+                {
+                    logger.Info($"FastInstall: Updating PluginId for '{dbGame.Name}' from {dbGame.PluginId} to {Id}");
+                    dbGame.PluginId = Id;
+                    needsUpdate = true;
+                }
+
+                // Update InstallDirectory
+                if (!string.IsNullOrWhiteSpace(installDirectory) && dbGame.InstallDirectory != installDirectory)
+                {
+                    logger.Debug($"FastInstall: Updating InstallDirectory for '{dbGame.Name}' to '{installDirectory}'");
+                    dbGame.InstallDirectory = installDirectory;
+                    needsUpdate = true;
+                }
+
+                // Ensure IsInstalled is true
+                if (!dbGame.IsInstalled)
+                {
+                    logger.Debug($"FastInstall: Setting IsInstalled=true for '{dbGame.Name}'");
+                    dbGame.IsInstalled = true;
+                    needsUpdate = true;
+                }
+
+                // Update platform from configuration
+                var config = GetGameConfiguration(dbGame);
+                if (config != null)
+                {
+                    var detectedGame = GetDetectedGameInfo(dbGame);
+                    var platformName = detectedGame?.PlatformName ?? "PC (Windows)";
+                    
+                    // Override platform if specified in configuration
+                    if (!string.IsNullOrWhiteSpace(config.Platform) && config.Platform != "PC")
+                    {
+                        platformName = config.Platform;
+                    }
+
+                    // Check if platform needs to be updated
+                    var currentPlatform = dbGame.Platforms?.FirstOrDefault()?.Name;
+                    if (currentPlatform != platformName)
+                    {
+                        logger.Info($"FastInstall: Updating platform for '{dbGame.Name}' from '{currentPlatform ?? "(null)"}' to '{platformName}'");
+                        
+                        // Get or create the platform
+                        var platform = PlayniteApi.Database.Platforms.FirstOrDefault(p => p.Name == platformName);
+                        if (platform == null)
+                        {
+                            platform = new Platform { Name = platformName };
+                            PlayniteApi.Database.Platforms.Add(platform);
+                        }
+                        
+                        // Clear existing platforms and add the new one
+                        dbGame.Platforms.Clear();
+                        dbGame.Platforms.Add(platform);
+                        needsUpdate = true;
+                    }
+                }
+                else
+                {
+                    // For cloud games, try to get platform from cloud source
+                    var cloudSource = GetCloudSourceConfiguration(dbGame);
+                    if (cloudSource != null && !string.IsNullOrWhiteSpace(cloudSource.Platform))
+                    {
+                        var currentPlatform = dbGame.Platforms?.FirstOrDefault()?.Name;
+                        if (currentPlatform != cloudSource.Platform)
+                        {
+                            logger.Info($"FastInstall: Updating platform for cloud game '{dbGame.Name}' to '{cloudSource.Platform}'");
+                            
+                            // Get or create the platform
+                            var platform = PlayniteApi.Database.Platforms.FirstOrDefault(p => p.Name == cloudSource.Platform);
+                            if (platform == null)
+                            {
+                                platform = new Platform { Name = cloudSource.Platform };
+                                PlayniteApi.Database.Platforms.Add(platform);
+                            }
+                            
+                            // Clear existing platforms and add the new one
+                            dbGame.Platforms.Clear();
+                            dbGame.Platforms.Add(platform);
+                            needsUpdate = true;
+                        }
+                    }
+                }
+
+                // Update the database if anything changed
+                if (needsUpdate)
+                {
+                    PlayniteApi.Database.Games.Update(dbGame);
+                    logger.Info($"FastInstall: Successfully updated game database entry for '{dbGame.Name}'");
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, $"FastInstall: Error updating game database entry for '{game.Name}'");
+            }
         }
     }
 }

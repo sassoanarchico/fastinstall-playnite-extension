@@ -53,6 +53,7 @@
     <Compile Include="FastInstallClient.cs" />
     <Compile Include="FastInstallSettings.cs" />
     <Compile Include="LocalizationConverters.cs" />
+    <Compile Include="LocalizedStringExtension.cs" />
     <Compile Include="FastInstallSettingsView.xaml.cs">
       <DependentUpon>FastInstallSettingsView.xaml</DependentUpon>
     </Compile>
@@ -94,6 +95,9 @@
     <None Include="Localization\*.xaml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <EmbeddedResource Include="Localization\*.xaml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\WinFX\v3.0\Presentation.targets" Condition="Exists('$(MSBuildExtensionsPath)\Microsoft\WinFX\v3.0\Presentation.targets')" />

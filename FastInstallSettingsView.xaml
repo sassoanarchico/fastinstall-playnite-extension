@@ -9,6 +9,7 @@
 
     <UserControl.Resources>
         <local:ConflictResolutionToLocalizedStringConverter x:Key="ConflictResolutionToLocalizedStringConverter"/>
+        <local:LocalizedStringConverter x:Key="LocalizedStringConverter"/>
     </UserControl.Resources>
 
     <Grid Margin="10">

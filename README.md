@@ -6,10 +6,31 @@ It's designed for large collections (including ROM folders/emulators) where you 
 
 ## Features
 
+### New in 1.3.4
+- **Fixed localization UI display**: Implemented comprehensive localization system with multiple fallback mechanisms:
+  - LocalizedStringExtension now tries ResourceProvider.GetString(), Application.Resources, and target object resources
+  - Improved resource loading with multiple path detection (Playnite extension directories, assembly location, common paths)
+  - Better error handling with readable fallback text (removes LOCFastInstall_ prefix)
+  - Resources are now properly loaded into both UserControl and Application.Resources for maximum compatibility
+
+### New in 1.3.3
+- **Fixed localization UI**: Replaced all DynamicResource bindings with LocalizedStringExtension that uses ResourceProvider.GetString(), ensuring all UI text is properly localized and displayed correctly
+
+### New in 1.3.2
+- **Fixed localization display**: Localization resources are now explicitly loaded in the settings view, fixing missing text and localization keys being displayed instead of translated strings
+
+### New in 1.3.1
+- **Fixed installation status preservation**: GetGames() now checks existing database games first and preserves their installation status during library scans
+- **Fixed localization resources**: Localization files are now properly included as embedded resources
+
+### New in 1.3.0
+- **Fixed EmuLibrary conflict**: Games installed with FastInstall now correctly preserve their platform and emulator settings, preventing EmuLibrary from overwriting game information during library scans
+- **Database persistence**: Game metadata (platform, PluginId, InstallDirectory) is now explicitly updated after installation to ensure consistency
+
 ### New in 1.2.0
 - **Full localization support**:
   - English and Italian translations for all UI, dialogs, and notifications
-  - Automatic language selection based on Playnite’s current language
+  - Automatic language selection based on Playnite's current language
   - Localized error messages for Google Drive, 7-Zip, disk space checks, and integrity verification
 
 ### Core Functionality

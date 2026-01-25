@@ -32,5 +32,32 @@ namespace FastInstall
             return Binding.DoNothing;
         }
     }
+
+    /// <summary>
+    /// Converter that uses ResourceProvider.GetString() to get localized strings for XAML DynamicResource bindings
+    /// </summary>
+    public class LocalizedStringConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is string key)
+            {
+                try
+                {
+                    return ResourceProvider.GetString(key);
+                }
+                catch
+                {
+                    return key; // Return the key if not found
+                }
+            }
+            return value?.ToString() ?? string.Empty;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            return Binding.DoNothing;
+        }
+    }
 }
 

@@ -48,6 +48,7 @@ namespace FastInstall
         private static readonly object instanceLock = new object();
 
         private readonly IPlayniteAPI playniteAPI;
+        private FastInstallPlugin plugin; // Reference to the plugin for updating game database
         private readonly ConcurrentQueue<CloudDownloadJob> downloadQueue = new ConcurrentQueue<CloudDownloadJob>();
         private readonly ConcurrentDictionary<Guid, CloudDownloadJob> activeDownloads = new ConcurrentDictionary<Guid, CloudDownloadJob>();
         private readonly object queueLock = new object();
@@ -68,21 +69,27 @@ namespace FastInstall
             }
         }
 
-        public static void Initialize(IPlayniteAPI api, int maxParallelDownloads = 2, Func<string> sevenZipPathGetter = null)
+        public static void Initialize(IPlayniteAPI api, int maxParallelDownloads = 2, Func<string> sevenZipPathGetter = null, FastInstallPlugin plugin = null)
         {
             lock (instanceLock)
             {
                 if (instance == null)
                 {
-                    instance = new CloudDownloadManager(api, maxParallelDownloads, sevenZipPathGetter);
+                    instance = new CloudDownloadManager(api, maxParallelDownloads, sevenZipPathGetter, plugin);
                     logger.Info("CloudDownloadManager: Initialized");
+                }
+                else if (plugin != null)
+                {
+                    // Update plugin reference if provided
+                    instance.plugin = plugin;
                 }
             }
         }
 
-        private CloudDownloadManager(IPlayniteAPI api, int maxParallelDownloads, Func<string> sevenZipPathGetter)
+        private CloudDownloadManager(IPlayniteAPI api, int maxParallelDownloads, Func<string> sevenZipPathGetter, FastInstallPlugin plugin = null)
         {
             playniteAPI = api;
+            this.plugin = plugin;
             downloadSemaphore = new SemaphoreSlim(maxParallelDownloads, maxParallelDownloads);
             getSevenZipPathFunc = sevenZipPathGetter;
 
@@ -456,6 +463,14 @@ namespace FastInstall
                 playniteAPI.MainView.UIDispatcher.Invoke(() =>
                 {
                     job.ProgressWindow?.ShowCompleted();
+                    
+                    // Update game database to preserve FastInstall metadata (platform, PluginId, etc.)
+                    // This prevents other plugins (like EmuLibrary) from overwriting game information during library scans
+                    if (plugin != null)
+                    {
+                        plugin.UpdateGameAfterInstallation(job.Game, job.DestinationPath);
+                    }
+                    
                     job.OnInstalled?.Invoke(new GameInstalledEventArgs(new GameInstallationData
                     {
                         InstallDirectory = job.DestinationPath

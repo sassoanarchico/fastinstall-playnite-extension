@@ -515,9 +515,7 @@ namespace FastInstall
             }
         }
 
-        /// <summary>
-        /// Localized text shown in the Settings UI, e.g. "Version 1.1.1".
-        /// </summary>
+       
         public string PluginVersionText
         {
             get
