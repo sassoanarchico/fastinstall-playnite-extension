@@ -61,3 +61,15 @@ artifacts/
 .idea/
 *.sln.iml
 
+# Scripts
+*.ps1
+*.bat
+*.sh
+
+# Temporary directories
+temp_*/
+~/
+err/
+dist/
+lib/
+MyrientLibrary-extension/

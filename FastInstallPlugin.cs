@@ -50,7 +50,7 @@ namespace FastInstall
 
         public const string PluginVersion = "1.3.4";
         
-        public override Guid Id { get; } = Guid.Parse("F8A1B2C3-D4E5-6789-ABCD-EF1234567890");
+        public override Guid Id { get; } = Guid.Parse("e3f4a5b6-c7d8-9012-efab-3456789012cd");
         public override string Name => "FastInstall";
 
         public FastInstallSettings Settings => settingsViewModel?.Settings;
@@ -308,9 +308,13 @@ namespace FastInstall
                     if (parseResult.IsFolder && cloudSource.LinkType == CloudLinkType.SharedFolder)
                     {
                         // List files in the folder
-                        // Note: GetGames() is synchronous, so we must use GetAwaiter().GetResult()
-                        // Using ConfigureAwait(false) to avoid potential deadlocks
-                        var files = provider.ListFilesAsync(parseResult.FileId).ConfigureAwait(false).GetAwaiter().GetResult();
+                        // Note: GetGames() is synchronous, so we use Task.Run to isolate async operation
+                        // This prevents deadlocks by running in a separate synchronization context
+                        var files = Task.Run(async () => 
+                        {
+                            return await provider.ListFilesAsync(parseResult.FileId).ConfigureAwait(false);
+                        }).GetAwaiter().GetResult();
+                        
                         foreach (var file in files.Where(f => !f.IsFolder))
                         {
                             var gameName = GetGameNameFromFileName(file.Name);
